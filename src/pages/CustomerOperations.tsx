@@ -108,7 +108,6 @@ export const CustomerOperations = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -116,14 +115,12 @@ export const CustomerOperations = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Клиент',
       dataIndex: 'customer_name',
       key: 'customer_name',
       ellipsis: true,
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Тип',
@@ -134,7 +131,6 @@ export const CustomerOperations = () => {
           {getOperationTypeText(type)}
         </Tag>
       ),
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Сумма',
@@ -145,7 +141,6 @@ export const CustomerOperations = () => {
           {sum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
         </span>
       ),
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
   ];
 
@@ -232,7 +227,7 @@ export const CustomerOperations = () => {
                 rowKey="id"
                 size="small"
                 pagination={false}
-                scroll={{ y: 400 }}
+                scroll={{ x: 'max-content', y: 400 }}
                 columns={[
                   {
                     title: 'Товар',

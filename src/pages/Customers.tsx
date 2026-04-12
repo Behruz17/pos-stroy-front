@@ -290,7 +290,6 @@ export const Customers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -304,7 +303,6 @@ export const Customers = () => {
       dataIndex: 'phone',
       key: 'phone',
       render: (phone: string) => phone || '-',
-      responsive: ['sm'],
     },
     {
       title: 'Баланс',
@@ -316,7 +314,6 @@ export const Customers = () => {
           {balance.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Действия',
@@ -348,7 +345,6 @@ export const Customers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -356,14 +352,12 @@ export const Customers = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
-      responsive: ['sm'],
     },
     {
       title: 'Клиент',
       dataIndex: 'customer_name',
       key: 'customer_name',
       ellipsis: true,
-      responsive: ['sm'],
     },
     {
       title: 'Тип',
@@ -374,7 +368,6 @@ export const Customers = () => {
           {getOperationTypeText(type)}
         </Tag>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Сумма',
@@ -385,7 +378,6 @@ export const Customers = () => {
           {sum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
         </span>
       ),
-      responsive: ['sm'],
     },
   ];
 
@@ -394,7 +386,6 @@ export const Customers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -402,7 +393,6 @@ export const Customers = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Клиент',
@@ -420,7 +410,6 @@ export const Customers = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Тип',
@@ -691,7 +680,7 @@ export const Customers = () => {
                 rowKey="id"
                 size="small"
                 pagination={false}
-                scroll={{ y: 400 }}
+                scroll={{ x: 'max-content', y: 400 }}
                 columns={[
                   {
                     title: 'Товар',

@@ -150,7 +150,6 @@ export const Expenses = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -158,14 +157,12 @@ export const Expenses = () => {
       dataIndex: 'expense_date',
       key: 'expense_date',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Описание',
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
-      responsive: ['sm'],
     },
     {
       title: 'Сумма',
@@ -177,14 +174,12 @@ export const Expenses = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Создал',
       dataIndex: 'created_by_name',
       key: 'created_by_name',
       ellipsis: true,
-      responsive: ['md'],
     },
     {
       title: 'Действия',

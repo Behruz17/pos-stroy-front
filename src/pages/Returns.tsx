@@ -198,7 +198,6 @@ export const Returns = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -206,7 +205,6 @@ export const Returns = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Клиент',
@@ -224,7 +222,6 @@ export const Returns = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Действия',
@@ -267,7 +264,6 @@ export const Returns = () => {
       dataIndex: 'product_code',
       key: 'product_code',
       width: 100,
-      responsive: ['md'],
     },
     {
       title: 'Количество',
@@ -281,7 +277,6 @@ export const Returns = () => {
       key: 'unit_price',
       render: (price: number) => price.toLocaleString(),
       width: 100,
-      responsive: ['sm'],
     },
     {
       title: 'Сумма',
@@ -290,7 +285,6 @@ export const Returns = () => {
         <strong>{(record.quantity * record.unit_price).toLocaleString()}</strong>
       ),
       width: 100,
-      responsive: ['sm'],
     },
   ];
 
@@ -544,6 +538,7 @@ export const Returns = () => {
                 dataSource={selectedReturn.items || []}
                 rowKey="id"
                 pagination={false}
+                scroll={{ x: 'max-content' }}
                 size="small"
               />
             )}

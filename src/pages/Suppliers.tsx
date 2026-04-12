@@ -286,7 +286,6 @@ export const Suppliers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -299,7 +298,6 @@ export const Suppliers = () => {
       title: 'Телефон',
       dataIndex: 'phone',
       key: 'phone',
-      responsive: ['sm'],
     },
     {
       title: 'Баланс',
@@ -310,7 +308,6 @@ export const Suppliers = () => {
           {balance.toLocaleString()} {record.currency}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Действия',
@@ -342,7 +339,6 @@ export const Suppliers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -350,14 +346,12 @@ export const Suppliers = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
-      responsive: ['sm'],
     },
     {
       title: 'Поставщик',
       dataIndex: 'supplier_name',
       key: 'supplier_name',
       ellipsis: true,
-      responsive: ['sm'],
     },
     {
       title: 'Тип',
@@ -368,7 +362,6 @@ export const Suppliers = () => {
           {getOperationTypeText(type)}
         </Tag>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Сумма',
@@ -379,7 +372,6 @@ export const Suppliers = () => {
           {sum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
         </span>
       ),
-      responsive: ['sm'],
     },
   ];
 
@@ -388,7 +380,6 @@ export const Suppliers = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -396,7 +387,6 @@ export const Suppliers = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Поставщик',
@@ -414,7 +404,6 @@ export const Suppliers = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Тип',
@@ -683,7 +672,7 @@ export const Suppliers = () => {
                 rowKey="id"
                 size="small"
                 pagination={false}
-                scroll={{ y: 400 }}
+                scroll={{ x: 'max-content', y: 400 }}
                 columns={[
                   {
                     title: 'Товар',

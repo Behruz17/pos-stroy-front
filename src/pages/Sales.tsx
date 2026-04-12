@@ -228,7 +228,6 @@ export const Sales = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -236,7 +235,6 @@ export const Sales = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Клиент',
@@ -254,7 +252,6 @@ export const Sales = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Статус оплаты',
@@ -265,7 +262,6 @@ export const Sales = () => {
           {status === 'PAID' ? 'Оплачено' : 'Долг'}
         </Tag>
       ),
-      responsive: ['sm'],
     },
     {
       title: 'Действия',
@@ -305,7 +301,6 @@ export const Sales = () => {
       dataIndex: 'product_code',
       key: 'product_code',
       width: 100,
-      responsive: ['md'],
     },
     {
       title: 'Количество',
@@ -319,7 +314,6 @@ export const Sales = () => {
       key: 'unit_price',
       render: (price: number) => price.toLocaleString(),
       width: 100,
-      responsive: ['sm'],
     },
     {
       title: 'Итого',
@@ -328,7 +322,6 @@ export const Sales = () => {
         <strong>{(record.quantity * record.unit_price).toLocaleString()}</strong>
       ),
       width: 100,
-      responsive: ['sm'],
     },
   ];
 
@@ -613,6 +606,7 @@ export const Sales = () => {
                 dataSource={selectedSale.items || []}
                 rowKey="id"
                 pagination={false}
+                scroll={{ x: 'max-content' }}
                 size="small"
               />
             )}

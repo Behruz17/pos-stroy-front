@@ -106,7 +106,6 @@ export const SupplierPayments = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -114,7 +113,6 @@ export const SupplierPayments = () => {
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Поставщик',
@@ -132,7 +130,6 @@ export const SupplierPayments = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Тип',

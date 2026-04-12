@@ -231,7 +231,6 @@ export const Debtors = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'ФИО',
@@ -244,7 +243,6 @@ export const Debtors = () => {
       dataIndex: 'phone',
       key: 'phone',
       width: 150,
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Сумма долга',
@@ -259,14 +257,12 @@ export const Debtors = () => {
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
-      responsive: ['lg'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Дата создания',
       dataIndex: 'created_at',
       key: 'created_at',
       width: 150,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
       render: (date: string) => dayjs(date).format('DD.MM.YYYY'),
     },
     {
@@ -305,7 +301,6 @@ export const Debtors = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Должник',
@@ -341,14 +336,12 @@ export const Debtors = () => {
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
-      responsive: ['lg'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Дата',
       dataIndex: 'date',
       key: 'date',
       width: 150,
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
     },
     {

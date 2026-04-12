@@ -164,7 +164,6 @@ export const StockReceipts = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -172,7 +171,6 @@ export const StockReceipts = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString(),
-      responsive: ['sm'],
     },
     {
       title: 'Поставщик',
@@ -190,7 +188,6 @@ export const StockReceipts = () => {
           {amount.toLocaleString()}
         </span>
       ),
-      responsive: ['sm'],
     },
   ];
 
@@ -206,7 +203,6 @@ export const StockReceipts = () => {
       dataIndex: 'product_code',
       key: 'product_code',
       width: 100,
-      responsive: ['md'],
     },
     {
       title: 'Количество',
@@ -220,7 +216,6 @@ export const StockReceipts = () => {
       key: 'purchase_cost',
       render: (cost: number) => cost.toLocaleString(),
       width: 100,
-      responsive: ['sm'],
     },
     {
       title: 'Цена продажи',
@@ -228,7 +223,6 @@ export const StockReceipts = () => {
       key: 'selling_price',
       render: (price: number) => price.toLocaleString(),
       width: 100,
-      responsive: ['sm'],
     },
     {
       title: 'Сумма',
@@ -237,7 +231,6 @@ export const StockReceipts = () => {
         <strong>{(record.quantity * record.purchase_cost).toLocaleString()}</strong>
       ),
       width: 100,
-      responsive: ['sm'],
     },
   ];
 
@@ -522,6 +515,7 @@ export const StockReceipts = () => {
                 dataSource={selectedReceipt.items || []}
                 rowKey="id"
                 pagination={false}
+                scroll={{ x: 'max-content' }}
                 size="small"
               />
             )}

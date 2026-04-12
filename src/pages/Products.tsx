@@ -92,7 +92,6 @@ export const Products = () => {
       title: '№',
       key: 'rowNumber',
       width: 60,
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
@@ -126,7 +125,6 @@ export const Products = () => {
       dataIndex: 'product_code',
       key: 'product_code',
       render: (code: string | undefined) => code || '-',
-      responsive: ['md'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Остаток',
@@ -141,7 +139,6 @@ export const Products = () => {
         </span>
       ),
       width: 80,
-      responsive: ['sm'] as ('md' | 'xxxl' | 'xxl' | 'xl' | 'lg' | 'sm' | 'xs')[],
     },
     {
       title: 'Действия',
