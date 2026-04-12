@@ -1,0 +1,22 @@
+/* Layout responsive styles */
+.mobile-header {
+  display: none;
+}
+
+.desktop-sidebar {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .mobile-header {
+    display: flex !important;
+  }
+  
+  .desktop-sidebar {
+    display: none !important;
+  }
+  
+  .ant-layout {
+    margin-left: 0 !important;
+  }
+}

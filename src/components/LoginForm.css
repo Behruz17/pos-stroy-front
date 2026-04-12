@@ -1,0 +1,73 @@
+/* Container */
+.login-container {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-sizing: border-box;
+}
+
+/* Remove default body margin and scroll */
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+/* Card */
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Title */
+.login-title {
+  text-align: center;
+  margin-bottom: 24px !important;
+}
+
+/* Inputs */
+.login-card .ant-input-affix-wrapper {
+  border-radius: 8px;
+}
+
+.login-card .ant-input-prefix {
+  color: #8c8c8c;
+}
+
+/* Button */
+.login-button {
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 16px;
+  }
+
+  .login-card {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    max-width: 100%;
+  }
+
+  .login-title {
+    font-size: 24px !important;
+    margin-bottom: 16px !important;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 360px) {
+  .login-container {
+    padding: 12px;
+  }
+
+  .login-card {
+    border-radius: 8px;
+  }
+}
