@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag, Spin, DatePicker } from 'antd';
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, CalendarOutlined, UserOutlined } from '@ant-design/icons';
-import { salesApi, customersApi, productsApi, type Sale, type SaleItem, type CreateSaleRequest, type Customer, type Product } from '../api';
+import { salesApi, customersApi, productsApi, type Sale, type SaleItem, type CreateSaleRequest, type UpdateSaleItem, type Customer, type Product } from '../api';
 import dayjs from 'dayjs';
-import { useNavigate } from 'react-router-dom';
 
 interface CreateSaleItemLocal {
   product_id: number;
@@ -15,7 +14,6 @@ const { Title } = Typography;
 const { Option } = Select;
 
 export const Sales = () => {
-  const navigate = useNavigate();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('list');
@@ -30,6 +28,10 @@ export const Sales = () => {
   const [loadingSaleDetails, setLoadingSaleDetails] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [stockErrorModal, setStockErrorModal] = useState<{ visible: boolean; productName: string }>({ visible: false, productName: '' });
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editSaleItems, setEditSaleItems] = useState<UpdateSaleItem[]>([]);
 
   const fetchSales = async () => {
     setLoading(true);
@@ -204,6 +206,94 @@ export const Sales = () => {
     }
   };
 
+  const handleEdit = async (sale: Sale) => {
+    setEditingSale(sale);
+    setEditModalVisible(true);
+    form.setFieldsValue({
+      customer_id: sale.customer_id,
+      payment_status: sale.payment_status,
+    });
+    
+    // Load sale details to get items
+    setLoadingSaleDetails(true);
+    try {
+      const saleDetails = await salesApi.getById(sale.id);
+      if (saleDetails.items) {
+        const items: UpdateSaleItem[] = saleDetails.items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        }));
+        setEditSaleItems(items);
+      }
+    } catch (error) {
+      message.error('Ошибка при загрузке деталей продажи');
+    } finally {
+      setLoadingSaleDetails(false);
+    }
+  };
+
+  const handleUpdate = async (values: any) => {
+    if (!editingSale) return;
+    
+    if (editSaleItems.length === 0) {
+      message.error('Добавьте хотя бы один товар');
+      return;
+    }
+
+    // Validate items
+    for (const item of editSaleItems) {
+      if (!item.product_id || item.product_id === 0) {
+        message.error('Выберите товар для всех позиций');
+        return;
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        message.error('Укажите корректное количество для всех позиций');
+        return;
+      }
+      if (!item.unit_price || item.unit_price <= 0) {
+        message.error('Укажите корректную цену для всех позиций');
+        return;
+      }
+    }
+
+    setEditing(true);
+    try {
+      const updateData = {
+        customer_id: values.customer_id,
+        payment_status: values.payment_status,
+        items: editSaleItems,
+      };
+
+      await salesApi.update(editingSale.id, updateData);
+      message.success('Продажа успешно обновлена');
+      setEditModalVisible(false);
+      setEditingSale(null);
+      setEditSaleItems([]);
+      form.resetFields();
+      fetchSales();
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number; data?: { message?: string; productName?: string } }; message?: string };
+      if (axiosError.response?.status === 400) {
+        const errorMessage = axiosError.response.data?.message || 'Ошибка при обновлении продажи';
+        if (axiosError.response.data?.productName) {
+          setStockErrorModal({
+            visible: true,
+            productName: axiosError.response.data.productName,
+          });
+        } else {
+          message.error(errorMessage);
+        }
+      } else if (axiosError.message?.includes('Network Error')) {
+        message.error('Сервер недоступен. Проверьте подключение.');
+      } else {
+        message.error('Ошибка при обновлении продажи');
+      }
+    } finally {
+      setEditing(false);
+    }
+  };
+
   const addSaleItem = () => {
     const newItem: CreateSaleItemLocal = {
       product_id: 0,
@@ -271,7 +361,10 @@ export const Sales = () => {
         <Space size="small">
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/sales/${record.id}/edit`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(record);
+            }}
             size="small"
             title="Редактировать"
           />
@@ -365,7 +458,7 @@ export const Sales = () => {
               <DatePicker
                 placeholder="Фильтр по дате"
                 value={selectedDate ? dayjs(selectedDate) : null}
-                onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : undefined)}
+                onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
                 style={{ width: '100%' }}
                 allowClear
               />
@@ -636,6 +729,146 @@ export const Sales = () => {
             Пожалуйста, проверьте остатки или пополните склад через приходы.
           </p>
         </div>
+      </Modal>
+
+      <Modal
+        title="Редактировать продажу"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingSale(null);
+          setEditSaleItems([]);
+          form.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModalVisible(false);
+            setEditingSale(null);
+            setEditSaleItems([]);
+            form.resetFields();
+          }}>
+            Отмена
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+            Обновить
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Spin spinning={loadingSaleDetails}>
+          <Form
+            form={form}
+            name="editSale"
+            onFinish={handleUpdate}
+            autoComplete="off"
+            layout="vertical"
+            size="large"
+          >
+            <Form.Item
+              label="Клиент"
+              name="customer_id"
+              rules={[{ required: true, message: 'Выберите клиента' }]}
+            >
+              <Select placeholder="Выберите клиента" prefix={<UserOutlined />}>
+                {customers.map(customer => (
+                  <Option key={customer.id} value={customer.id}>
+                    {customer.full_name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item
+              label="Статус оплаты"
+              name="payment_status"
+              rules={[{ required: true, message: 'Выберите статус оплаты' }]}
+            >
+              <Select placeholder="Выберите статус">
+                <Option value="PAID">Оплачено</Option>
+                <Option value="DEBT">В долг</Option>
+              </Select>
+            </Form.Item>
+
+            <div style={{ marginBottom: 16 }}>
+              <Title level={5}>Товары</Title>
+              {editSaleItems.map((item, index) => (
+                <Row key={index} gutter={[8, 8]} style={{ marginBottom: 8 }} align="middle">
+                  <Col flex="auto">
+                    <Select
+                      placeholder="Выберите товар"
+                      value={item.product_id || undefined}
+                      onChange={(value) => {
+                        const newItems = [...editSaleItems];
+                        newItems[index] = {
+                          ...newItems[index],
+                          product_id: value,
+                        };
+                        setEditSaleItems(newItems);
+                      }}
+                      style={{ width: '100%' }}
+                    >
+                      {products.map(product => (
+                        <Option key={product.id} value={product.id}>
+                          {product.name} (Остаток: {product.stock_quantity})
+                        </Option>
+                      ))}
+                    </Select>
+                  </Col>
+                  <Col flex="100px">
+                    <InputNumber
+                      placeholder="Кол-во"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(value) => {
+                        const newItems = [...editSaleItems];
+                        newItems[index] = { ...newItems[index], quantity: value || 1 };
+                        setEditSaleItems(newItems);
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+                  <Col flex="120px">
+                    <InputNumber
+                      placeholder="Цена"
+                      min={0.01}
+                      step={0.01}
+                      value={item.unit_price}
+                      onChange={(value) => {
+                        const newItems = [...editSaleItems];
+                        newItems[index] = { ...newItems[index], unit_price: value || 0 };
+                        setEditSaleItems(newItems);
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </Col>
+                  <Col flex="40px">
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => {
+                        setEditSaleItems(editSaleItems.filter((_, i) => i !== index));
+                      }}
+                    />
+                  </Col>
+                </Row>
+              ))}
+              <Button
+                type="dashed"
+                onClick={() => {
+                  setEditSaleItems([...editSaleItems, { product_id: 0, quantity: 1, unit_price: 0 }]);
+                }}
+                icon={<PlusOutlined />}
+                style={{ width: '100%', marginTop: 8 }}
+              >
+                Добавить товар
+              </Button>
+            </div>
+
+            <div style={{ textAlign: 'right', fontSize: 18, fontWeight: 'bold' }}>
+              Итого: {editSaleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+            </div>
+          </Form>
+        </Spin>
       </Modal>
     </div>
   );

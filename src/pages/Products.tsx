@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Input, Row, Col, type TableProps, Image, Upload } from 'antd';
+import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Input, InputNumber, Row, Col, type TableProps, Image, Upload, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, ShoppingOutlined, BarcodeOutlined, InboxOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { productsApi, type Product } from '../api';
-import { useNavigate } from 'react-router-dom';
 
 const { Title } = Typography;
 
@@ -13,9 +12,12 @@ export const Products = () => {
   const [activeTab, setActiveTab] = useState('list');
   const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -87,6 +89,44 @@ export const Products = () => {
     }
   };
 
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
+    setEditModalVisible(true);
+    setEditImagePreview(product.image ? `http://localhost:3000${product.image}` : null);
+    form.setFieldsValue({
+      name: product.name,
+      manufacturer: product.manufacturer,
+      product_code: product.product_code,
+      notification_threshold: product.notification_threshold,
+    });
+  };
+
+  const handleUpdate = async (values: any) => {
+    if (!editingProduct) return;
+
+    setEditing(true);
+    try {
+      await productsApi.update(editingProduct.id, values);
+      message.success('Товар успешно обновлен');
+      setEditModalVisible(false);
+      setEditingProduct(null);
+      setEditImagePreview(null);
+      form.resetFields();
+      fetchProducts();
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
+      if (axiosError.response?.status === 400) {
+        message.error(axiosError.response.data?.message || 'Ошибка при обновлении товара');
+      } else if (axiosError.message?.includes('Network Error')) {
+        message.error('Сервер недоступен. Проверьте подключение.');
+      } else {
+        message.error('Ошибка при обновлении товара');
+      }
+    } finally {
+      setEditing(false);
+    }
+  };
+
   const columns: TableProps<Product>['columns'] = [
     {
       title: '№',
@@ -148,7 +188,7 @@ export const Products = () => {
         <Space size="small">
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/products/${record.id}/edit`)}
+            onClick={() => handleEdit(record)}
             size="small"
           />
           <Popconfirm
@@ -328,6 +368,121 @@ export const Products = () => {
         onChange={setActiveTab}
         items={tabItems}
       />
+
+      <Modal
+        title="Редактировать товар"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingProduct(null);
+          setEditImagePreview(null);
+          form.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModalVisible(false);
+            setEditingProduct(null);
+            setEditImagePreview(null);
+            form.resetFields();
+          }}>
+            Отмена
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+            Обновить
+          </Button>,
+        ]}
+        width={600}
+      >
+        <Form
+          form={form}
+          name="editProduct"
+          onFinish={handleUpdate}
+          autoComplete="off"
+          layout="vertical"
+          size="large"
+        >
+          <Form.Item
+            label="Наименование"
+            name="name"
+            rules={[{ required: true, message: 'Введите наименование товара' }]}
+          >
+            <Input placeholder="Введите наименование товара" prefix={<ShoppingOutlined />} />
+          </Form.Item>
+
+          <Form.Item
+            label="Производитель"
+            name="manufacturer"
+          >
+            <Input placeholder="Введите производителя" prefix={<TeamOutlined />} />
+          </Form.Item>
+
+          <Form.Item
+            label="Код товара"
+            name="product_code"
+          >
+            <Input placeholder="Введите код товара" prefix={<BarcodeOutlined />} />
+          </Form.Item>
+
+          <Form.Item
+            label="Порог уведомления"
+            name="notification_threshold"
+            rules={[{ type: 'number', min: 0, message: 'Порог должен быть не меньше 0' }]}
+          >
+            <InputNumber
+              placeholder="Введите порог уведомления"
+              min={0}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+
+          {editImagePreview && (
+            <div style={{ marginBottom: 16, textAlign: 'center' }}>
+              <Image
+                src={editImagePreview}
+                alt="Preview"
+                style={{ maxWidth: 200, maxHeight: 200, objectFit: 'cover', borderRadius: 8 }}
+                preview={false}
+              />
+            </div>
+          )}
+
+          <Form.Item
+            name="image"
+            valuePropName="file"
+            getValueFromEvent={(e) => {
+              if (Array.isArray(e)) {
+                return e[0]?.originFileObj;
+              }
+              return e?.fileList?.[0]?.originFileObj;
+            }}
+          >
+            <Upload
+              listType="picture-card"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  setEditImagePreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+                return false;
+              }}
+            >
+              {editImagePreview ? (
+                <div>
+                  <div style={{ marginBottom: 8 }}>Изменить изображение</div>
+                  <UploadOutlined />
+                </div>
+              ) : (
+                <div>
+                  <UploadOutlined />
+                  <div style={{ marginTop: 8 }}>Загрузить</div>
+                </div>
+              )}
+            </Upload>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

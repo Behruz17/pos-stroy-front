@@ -5,16 +5,11 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
 import { Users } from './pages/Users'
-import { UserEdit } from './pages/UserEdit'
 import { Suppliers } from './pages/Suppliers'
-import { SupplierEdit } from './pages/SupplierEdit'
 import { Products } from './pages/Products'
-import { ProductEdit } from './pages/ProductEdit'
 import { Customers } from './pages/Customers'
-import { CustomerEdit } from './pages/CustomerEdit'
 import { StockReceipts } from './pages/StockReceipts'
 import { Sales } from './pages/Sales'
-import { SaleEdit } from './pages/SaleEdit'
 import { Returns } from './pages/Returns'
 import { Expenses } from './pages/Expenses'
 import { Debtors } from './pages/Debtors'
@@ -45,27 +40,11 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/users/:id/edit"
-              element={
-                <ProtectedRoute requiredRole="ADMIN">
-                  <UserEdit />
-                </ProtectedRoute>
-              }
-            />
-            <Route
+                        <Route
               path="/suppliers"
               element={
                 <ProtectedRoute>
                   <Suppliers />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/suppliers/:id/edit"
-              element={
-                <ProtectedRoute>
-                  <SupplierEdit />
                 </ProtectedRoute>
               }
             />
@@ -77,15 +56,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/products/:id/edit"
-              element={
-                <ProtectedRoute>
-                  <ProductEdit />
-                </ProtectedRoute>
-              }
-            />
-            <Route
+                        <Route
               path="/customers"
               element={
                 <ProtectedRoute>
@@ -93,15 +64,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/customers/:id/edit"
-              element={
-                <ProtectedRoute>
-                  <CustomerEdit />
-                </ProtectedRoute>
-              }
-            />
-            <Route
+                        <Route
               path="/stock-receipts"
               element={
                 <ProtectedRoute>
@@ -117,15 +80,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/sales/:id/edit"
-              element={
-                <ProtectedRoute>
-                  <SaleEdit />
-                </ProtectedRoute>
-              }
-            />
-            <Route
+                        <Route
               path="/returns"
               element={
                 <ProtectedRoute>

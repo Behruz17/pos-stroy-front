@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, PhoneOutlined, SearchOutlined, UserOutlined, DollarOutlined, TransactionOutlined } from '@ant-design/icons';
 import { customersApi, customerOperationsApi, salesApi, customerPaymentsApi, type Customer, type CreateCustomerRequest, type CustomerOperation, type CustomerOperationFilters, type Sale, type CustomerPayment, type CreateCustomerPaymentRequest } from '../api';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -15,8 +14,10 @@ export const Customers = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
   
   // Customer operations state
   const [operations, setOperations] = useState<CustomerOperation[]>([]);
@@ -162,6 +163,40 @@ export const Customers = () => {
   const handleCreateModal = () => {
     setModalVisible(true);
     form.resetFields();
+  };
+
+  const handleEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setEditModalVisible(true);
+    form.setFieldsValue({
+      full_name: customer.full_name,
+      phone: customer.phone,
+    });
+  };
+
+  const handleUpdate = async (values: any) => {
+    if (!editingCustomer) return;
+
+    setEditing(true);
+    try {
+      await customersApi.update(editingCustomer.id, values);
+      message.success('Клиент успешно обновлен');
+      setEditModalVisible(false);
+      setEditingCustomer(null);
+      form.resetFields();
+      fetchCustomers();
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
+      if (axiosError.response?.status === 400) {
+        message.error(axiosError.response.data?.message || 'Ошибка при обновлении клиента');
+      } else if (axiosError.message?.includes('Network Error')) {
+        message.error('Сервер недоступен. Проверьте подключение.');
+      } else {
+        message.error('Ошибка при обновлении клиента');
+      }
+    } finally {
+      setEditing(false);
+    }
   };
 
   // Customer operations handlers
@@ -323,7 +358,7 @@ export const Customers = () => {
         <Space size="small">
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/customers/${record.id}/edit`)}
+            onClick={() => handleEdit(record)}
             size="small"
           />
           <Popconfirm
@@ -646,6 +681,53 @@ export const Customers = () => {
             rules={[{ required: true, message: 'Введите полное имя клиента' }]}
           >
             <Input placeholder="Например: Иванов Иван Иванович" prefix={<UserOutlined />} />
+          </Form.Item>
+
+          <Form.Item
+            label="Телефон"
+            name="phone"
+          >
+            <Input placeholder="+992123456789" prefix={<PhoneOutlined />} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Редактировать клиента"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingCustomer(null);
+          form.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModalVisible(false);
+            setEditingCustomer(null);
+            form.resetFields();
+          }}>
+            Отмена
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+            Обновить
+          </Button>,
+        ]}
+        width={600}
+      >
+        <Form
+          form={form}
+          name="editCustomer"
+          onFinish={handleUpdate}
+          autoComplete="off"
+          layout="vertical"
+          size="large"
+        >
+          <Form.Item
+            label="ФИО"
+            name="full_name"
+            rules={[{ required: true, message: 'Введите ФИО клиента' }]}
+          >
+            <Input placeholder="Введите ФИО клиента" prefix={<UserOutlined />} />
           </Form.Item>
 
           <Form.Item

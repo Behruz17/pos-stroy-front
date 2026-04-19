@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber } from 'antd';
 import { EditOutlined, DeleteOutlined, TeamOutlined, PlusOutlined, PhoneOutlined, SearchOutlined, AccountBookOutlined, DollarOutlined, ShopOutlined } from '@ant-design/icons';
 import { suppliersApi, supplierOperationsApi, stockReceiptsApi, supplierPaymentsApi, type Supplier, type CreateSupplierRequest, type SupplierOperation, type SupplierOperationFilters, type StockReceipt, type SupplierPayment, type CreateSupplierPaymentRequest } from '../api';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -15,8 +14,10 @@ export const Suppliers = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const navigate = useNavigate();
   const [form] = Form.useForm();
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
   
   // Supplier operations state
   const [operations, setOperations] = useState<SupplierOperation[]>([]);
@@ -162,6 +163,41 @@ export const Suppliers = () => {
   const handleCreateModal = () => {
     setModalVisible(true);
     form.resetFields();
+  };
+
+  const handleEdit = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    setEditModalVisible(true);
+    form.setFieldsValue({
+      name: supplier.name,
+      phone: supplier.phone,
+      currency: supplier.currency,
+    });
+  };
+
+  const handleUpdate = async (values: any) => {
+    if (!editingSupplier) return;
+    
+    setEditing(true);
+    try {
+      await suppliersApi.update(editingSupplier.id, values);
+      message.success('Поставщик успешно обновлен');
+      setEditModalVisible(false);
+      setEditingSupplier(null);
+      form.resetFields();
+      fetchSuppliers();
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
+      if (axiosError.response?.status === 400) {
+        message.error(axiosError.response.data?.message || 'Ошибка при обновлении поставщика');
+      } else if (axiosError.message?.includes('Network Error')) {
+        message.error('Сервер недоступен. Проверьте подключение.');
+      } else {
+        message.error('Ошибка при обновлении поставщика');
+      }
+    } finally {
+      setEditing(false);
+    }
   };
 
   // Supplier operations handlers
@@ -317,7 +353,7 @@ export const Suppliers = () => {
         <Space size="small">
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/suppliers/${record.id}/edit`)}
+            onClick={() => handleEdit(record)}
             size="small"
           />
           <Popconfirm
@@ -638,6 +674,53 @@ export const Suppliers = () => {
             rules={[{ required: true, message: 'Введите наименование поставщика' }]}
           >
             <Input placeholder="Например: ООО Поставщик" prefix={<TeamOutlined />} />
+          </Form.Item>
+
+          <Form.Item
+            label="Телефон"
+            name="phone"
+          >
+            <Input placeholder="+992123456789" prefix={<PhoneOutlined />} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Редактировать поставщика"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingSupplier(null);
+          form.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModalVisible(false);
+            setEditingSupplier(null);
+            form.resetFields();
+          }}>
+            Отмена
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+            Обновить
+          </Button>,
+        ]}
+        width={600}
+      >
+        <Form
+          form={form}
+          name="editSupplier"
+          onFinish={handleUpdate}
+          autoComplete="off"
+          layout="vertical"
+          size="large"
+        >
+          <Form.Item
+            label="Наименование"
+            name="name"
+            rules={[{ required: true, message: 'Введите наименование поставщика' }]}
+          >
+            <Input placeholder="Введите наименование поставщика" prefix={<ShopOutlined />} />
           </Form.Item>
 
           <Form.Item

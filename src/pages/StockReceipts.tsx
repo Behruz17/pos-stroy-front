@@ -274,7 +274,7 @@ export const StockReceipts = () => {
               <DatePicker
                 placeholder="Фильтр по дате"
                 value={selectedDate ? dayjs(selectedDate) : null}
-                onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : undefined)}
+                onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
                 style={{ width: '100%' }}
                 allowClear
               />

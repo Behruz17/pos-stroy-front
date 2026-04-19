@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Card, message, Popconfirm, Tag, Tabs, Form, Input, Select, Row, Col } from 'antd';
+import { Table, Button, Space, Typography, Card, message, Popconfirm, Tag, Tabs, Form, Input, Select, Row, Col, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, UserAddOutlined, SearchOutlined } from '@ant-design/icons';
 import { usersApi, authApi, type UserWithCreated } from '../api';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const { Title } = Typography;
@@ -22,9 +21,11 @@ export const Users = () => {
   const [activeTab, setActiveTab] = useState('list');
   const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [form] = Form.useForm();
+  const [editingUser, setEditingUser] = useState<UserWithCreated | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -77,6 +78,41 @@ export const Users = () => {
     }
   };
 
+  const handleEdit = (user: UserWithCreated) => {
+    setEditingUser(user);
+    setEditModalVisible(true);
+    form.setFieldsValue({
+      login: user.login,
+      name: user.name,
+      role: user.role,
+    });
+  };
+
+  const handleUpdate = async (values: any) => {
+    if (!editingUser) return;
+
+    setEditing(true);
+    try {
+      await usersApi.update(editingUser.id, values);
+      message.success('Пользователь успешно обновлен');
+      setEditModalVisible(false);
+      setEditingUser(null);
+      form.resetFields();
+      fetchUsers();
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
+      if (axiosError.response?.status === 400) {
+        message.error(axiosError.response.data?.message || 'Ошибка при обновлении пользователя');
+      } else if (axiosError.message?.includes('Network Error')) {
+        message.error('Сервер недоступен. Проверьте подключение.');
+      } else {
+        message.error('Ошибка при обновлении пользователя');
+      }
+    } finally {
+      setEditing(false);
+    }
+  };
+
   const columns = [
     {
       title: '№',
@@ -117,7 +153,7 @@ export const Users = () => {
         <Space>
           <Button
             icon={<EditOutlined />}
-            onClick={() => navigate(`/users/${record.id}/edit`)}
+            onClick={() => handleEdit(record)}
           />
           <Popconfirm
             title="Удалить пользователя?"
@@ -277,6 +313,65 @@ export const Users = () => {
         onChange={setActiveTab}
         items={tabItems}
       />
+
+      <Modal
+        title="Редактировать пользователя"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingUser(null);
+          form.resetFields();
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            setEditModalVisible(false);
+            setEditingUser(null);
+            form.resetFields();
+          }}>
+            Отмена
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+            Обновить
+          </Button>,
+        ]}
+        width={600}
+      >
+        <Form
+          form={form}
+          name="editUser"
+          onFinish={handleUpdate}
+          autoComplete="off"
+          layout="vertical"
+          size="large"
+        >
+          <Form.Item
+            label="Логин"
+            name="login"
+            rules={[{ required: true, message: 'Введите логин' }]}
+          >
+            <Input placeholder="Введите логин" />
+          </Form.Item>
+
+          <Form.Item
+            label="Имя"
+            name="name"
+            rules={[{ required: true, message: 'Введите имя' }]}
+          >
+            <Input placeholder="Введите имя" />
+          </Form.Item>
+
+          <Form.Item
+            label="Роль"
+            name="role"
+            rules={[{ required: true, message: 'Выберите роль' }]}
+          >
+            <Select placeholder="Выберите роль">
+              <Option value="ADMIN">ADMIN</Option>
+              <Option value="SELLER">SELLER</Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

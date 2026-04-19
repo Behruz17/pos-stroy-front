@@ -162,7 +162,16 @@ export const Debtors = () => {
   const handleSubmit = async (values: any) => {
     try {
       if (editingDebtor) {
-        await debtorsApi.update(editingDebtor.id, values as UpdateDebtorRequest);
+        // Exclude debt_amount if it's 0 to avoid server validation error
+        const updateData: UpdateDebtorRequest = {
+          full_name: values.full_name,
+          phone: values.phone,
+          description: values.description,
+        };
+        if (values.debt_amount && values.debt_amount > 0) {
+          updateData.debt_amount = values.debt_amount;
+        }
+        await debtorsApi.update(editingDebtor.id, updateData);
         message.success('Должник успешно обновлен');
       } else {
         await debtorsApi.create(values as CreateDebtorRequest);
@@ -251,19 +260,6 @@ export const Debtors = () => {
       width: 120,
       align: 'right' as const,
       render: (amount: number) => amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
-    },
-    {
-      title: 'Описание',
-      dataIndex: 'description',
-      key: 'description',
-      ellipsis: true,
-    },
-    {
-      title: 'Дата создания',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 150,
-      render: (date: string) => dayjs(date).format('DD.MM.YYYY'),
     },
     {
       title: 'Действия',
@@ -558,26 +554,15 @@ export const Debtors = () => {
             name="debt_amount"
             rules={[
               { required: true, message: 'Введите сумму долга' },
-              { type: 'number', min: 0.01, message: 'Сумма должна быть положительной' }
+              { type: 'number', min: 0, message: 'Сумма не может быть отрицательной' }
             ]}
           >
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Введите сумму долга"
-              min={0.01}
+              min={0}
               step={0.01}
               precision={2}
-            />
-          </Form.Item>
-          
-          <Form.Item
-            label="Описание"
-            name="description"
-            rules={[{ required: true, message: 'Введите описание долга' }]}
-          >
-            <TextArea
-              placeholder="Введите описание долга"
-              rows={3}
             />
           </Form.Item>
         </Form>
@@ -633,13 +618,13 @@ export const Debtors = () => {
             name="amount"
             rules={[
               { required: true, message: 'Введите сумму' },
-              { type: 'number', min: 0.01, message: 'Сумма должна быть положительной' }
+              { type: 'number', min: 0, message: 'Сумма не может быть отрицательной' }
             ]}
           >
             <InputNumber
               style={{ width: '100%' }}
               placeholder="Введите сумму"
-              min={0.01}
+              min={0}
               step={0.01}
               precision={2}
             />
@@ -647,11 +632,9 @@ export const Debtors = () => {
           
           <Form.Item
             label="Описание"
-            name="description"
-            rules={[{ required: true, message: 'Введите описание' }]}
-          >
+            name="description">
             <TextArea
-              placeholder="Введите описание операции"
+              placeholder="Введите описание операции (необязательно)"
               rows={3}
             />
           </Form.Item>
