@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   Table, 
   Button, 
@@ -46,6 +47,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 
 export const Debtors = () => {
+  const { t } = useTranslation();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -71,9 +73,9 @@ export const Debtors = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки должников');
+        message.error(t('debtors.errorLoading', { defaultValue: 'Ошибка загрузки должников' }));
       }
     } finally {
       setLoading(false);
@@ -88,9 +90,9 @@ export const Debtors = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки операций должников');
+        message.error(t('debtors.operationsErrorLoading', { defaultValue: 'Ошибка загрузки операций должников' }));
       }
     } finally {
       setOperationsLoading(false);
@@ -152,10 +154,10 @@ export const Debtors = () => {
   const handleDelete = async (id: number) => {
     try {
       await debtorsApi.delete(id);
-      message.success('Должник успешно удален');
+      message.success(t('debtors.debtorDeleted', { defaultValue: 'Должник успешно удален' }));
       fetchDebtors();
     } catch (error: unknown) {
-      message.error('Ошибка при удалении должника');
+      message.error(t('debtors.errorDeleting', { defaultValue: 'Ошибка при удалении должника' }));
     }
   };
 
@@ -172,16 +174,16 @@ export const Debtors = () => {
           updateData.debt_amount = values.debt_amount;
         }
         await debtorsApi.update(editingDebtor.id, updateData);
-        message.success('Должник успешно обновлен');
+        message.success(t('debtors.debtorUpdated', { defaultValue: 'Должник успешно обновлен' }));
       } else {
         await debtorsApi.create(values as CreateDebtorRequest);
-        message.success('Должник успешно создан');
+        message.success(t('debtors.debtorCreated', { defaultValue: 'Должник успешно создан' }));
       }
       setModalVisible(false);
       form.resetFields();
       fetchDebtors();
     } catch (error: unknown) {
-      message.error('Ошибка при сохранении должника');
+      message.error(t('debtors.errorSaving', { defaultValue: 'Ошибка при сохранении должника' }));
     }
   };
 
@@ -194,10 +196,10 @@ export const Debtors = () => {
   const handleDeleteOperation = async (id: number) => {
     try {
       await debtorOperationsApi.delete(id);
-      message.success('Операция успешно удалена');
+      message.success(t('debtors.operationDeleted', { defaultValue: 'Операция успешно удалена' }));
       fetchOperations();
     } catch (error: unknown) {
-      message.error('Ошибка при удалении операции');
+      message.error(t('debtors.errorDeletingOperation', { defaultValue: 'Ошибка при удалении операции' }));
     }
   };
 
@@ -205,16 +207,16 @@ export const Debtors = () => {
     try {
       if (operationType === 'BORROWED') {
         await debtorOperationsApi.createBorrowed(values as CreateBorrowedRequest);
-        message.success('Операция займа успешно создана');
+        message.success(t('debtors.borrowOperationCreated', { defaultValue: 'Операция займа успешно создана' }));
       } else {
         await debtorOperationsApi.createReturned(values as CreateReturnedRequest);
-        message.success('Операция возврата успешно создана');
+        message.success(t('debtors.returnOperationCreated', { defaultValue: 'Операция возврата успешно создана' }));
       }
       setOperationModalVisible(false);
       operationForm.resetFields();
       fetchOperations();
     } catch (error: unknown) {
-      message.error('Ошибка при сохранении операции');
+      message.error(t('debtors.errorSavingOperation', { defaultValue: 'Ошибка при сохранении операции' }));
     }
   };
 
@@ -228,8 +230,8 @@ export const Debtors = () => {
 
   const getOperationTypeText = (type: string) => {
     switch (type) {
-      case 'BORROWED': return 'Займ';
-      case 'RETURNED': return 'Возврат';
+      case 'BORROWED': return t('debtors.borrowed');
+      case 'RETURNED': return t('debtors.returned');
       default: return type;
     }
   };
@@ -242,19 +244,19 @@ export const Debtors = () => {
       width: 80,
     },
     {
-      title: 'ФИО',
+      title: t('debtors.fullName'),
       dataIndex: 'full_name',
       key: 'full_name',
       ellipsis: true,
     },
     {
-      title: 'Телефон',
+      title: t('common.phone'),
       dataIndex: 'phone',
       key: 'phone',
       width: 150,
     },
     {
-      title: 'Сумма долга',
+      title: t('debtors.debtAmount'),
       dataIndex: 'debt_amount',
       key: 'debt_amount',
       width: 120,
@@ -262,7 +264,7 @@ export const Debtors = () => {
       render: (amount: number) => amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
     },
     {
-      title: 'Действия',
+      title: t('common.actions'),
       key: 'actions',
       width: 100,
       render: (_: any, record: Debtor) => (
@@ -274,10 +276,10 @@ export const Debtors = () => {
             size="small"
           />
           <Popconfirm
-            title="Вы уверены, что хотите удалить этого должника?"
+            title={t('debtors.confirmDelete')}
             onConfirm={() => handleDelete(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button
               type="link"
@@ -299,13 +301,13 @@ export const Debtors = () => {
       width: 80,
     },
     {
-      title: 'Должник',
+      title: t('debtors.debtor'),
       dataIndex: 'debtor_name',
       key: 'debtor_name',
       ellipsis: true,
     },
     {
-      title: 'Тип',
+      title: t('common.type'),
       dataIndex: 'type',
       key: 'type',
       width: 100,
@@ -316,7 +318,7 @@ export const Debtors = () => {
       ),
     },
     {
-      title: 'Сумма',
+      title: t('common.amount'),
       dataIndex: 'amount',
       key: 'amount',
       width: 120,
@@ -328,29 +330,29 @@ export const Debtors = () => {
       ),
     },
     {
-      title: 'Описание',
+      title: t('common.description'),
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
     },
     {
-      title: 'Дата',
+      title: t('common.date'),
       dataIndex: 'date',
       key: 'date',
       width: 150,
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
     },
     {
-      title: 'Действия',
+      title: t('common.actions'),
       key: 'actions',
       width: 100,
       render: (_: any, record: DebtorOperation) => (
         <Space size="small">
           <Popconfirm
-            title="Вы уверены, что хотите удалить эту операцию?"
+            title={t('debtors.confirmDeleteOperation')}
             onConfirm={() => handleDeleteOperation(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button
               type="link"
@@ -370,7 +372,7 @@ export const Debtors = () => {
       label: (
         <span>
           <TeamOutlined />
-          Должники
+          {t('debtors.title')}
         </span>
       ),
       children: (
@@ -379,7 +381,7 @@ export const Debtors = () => {
             <Row gutter={[16, 16]} align="middle">
               <Col xs={24} sm={12} md={16}>
                 <Input
-                  placeholder="Поиск по ФИО или телефону"
+                  placeholder={t('debtors.searchPlaceholder', { defaultValue: 'Поиск по ФИО или телефону' })}
                   prefix={<SearchOutlined />}
                   value={searchText}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -393,7 +395,7 @@ export const Debtors = () => {
                   onClick={handleCreate}
                   style={{ width: '100%' }}
                 >
-                  Добавить должника
+                  {t('debtors.addDebtor')}
                 </Button>
               </Col>
             </Row>
@@ -420,7 +422,7 @@ export const Debtors = () => {
       label: (
         <span>
           <AccountBookOutlined />
-          Операции
+          {t('debtors.operations')}
         </span>
       ),
       children: (
@@ -429,7 +431,7 @@ export const Debtors = () => {
             <Row gutter={[16, 16]} align="middle">
               <Col xs={24} sm={12} md={8}>
                 <Input
-                  placeholder="Поиск по ФИО или описанию"
+                  placeholder={t('debtors.searchOperationsPlaceholder', { defaultValue: 'Поиск по ФИО или описанию' })}
                   prefix={<SearchOutlined />}
                   value={operationsSearchText}
                   onChange={(e) => handleOperationsSearch(e.target.value)}
@@ -438,7 +440,7 @@ export const Debtors = () => {
               </Col>
               <Col xs={24} sm={12} md={4}>
                 <DatePicker
-                  placeholder="Дата"
+                  placeholder={t('common.date')}
                   value={filters.date ? dayjs(filters.date) : null}
                   onChange={(value) => handleFilterChange('date', value)}
                   style={{ width: '100%' }}
@@ -447,14 +449,14 @@ export const Debtors = () => {
               </Col>
               <Col xs={24} sm={12} md={4}>
                 <Select
-                  placeholder="Тип"
+                  placeholder={t('common.type')}
                   value={filters.type}
                   onChange={(value) => handleFilterChange('type', value)}
                   style={{ width: '100%' }}
                   allowClear
                 >
-                  <Option value="BORROWED">Займ</Option>
-                  <Option value="RETURNED">Возврат</Option>
+                  <Option value="BORROWED">{t('debtors.borrowed')}</Option>
+                  <Option value="RETURNED">{t('debtors.returned')}</Option>
                 </Select>
               </Col>
               <Col xs={24} sm={12} md={8}>
@@ -466,7 +468,7 @@ export const Debtors = () => {
                     onClick={() => handleCreateOperation('BORROWED')}
                     style={{ flex: 1 }}
                   >
-                    Займ
+                    {t('debtors.borrowed')}
                   </Button>
                   <Button
                     type="primary"
@@ -474,7 +476,7 @@ export const Debtors = () => {
                     onClick={() => handleCreateOperation('RETURNED')}
                     style={{ flex: 1 }}
                   >
-                    Возврат
+                    {t('debtors.returned')}
                   </Button>
                 </Space>
               </Col>
@@ -501,7 +503,7 @@ export const Debtors = () => {
 
   return (
     <div>
-      <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>Должники</Title>
+      <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>{t('debtors.title')}</Title>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -509,7 +511,7 @@ export const Debtors = () => {
       />
 
       <Modal
-        title={editingDebtor ? 'Редактировать должника' : 'Добавить должника'}
+        title={editingDebtor ? t('debtors.edit') : t('debtors.create')}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -520,10 +522,10 @@ export const Debtors = () => {
             setModalVisible(false);
             form.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => form.submit()}>
-            {editingDebtor ? 'Сохранить' : 'Создать'}
+            {editingDebtor ? t('common.save') : t('common.create')}
           </Button>,
         ]}
         width={600}
@@ -534,26 +536,26 @@ export const Debtors = () => {
           onFinish={handleSubmit}
         >
           <Form.Item
-            label="ФИО"
+            label={t('debtors.fullName')}
             name="full_name"
-            rules={[{ required: true, message: 'Введите ФИО должника' }]}
+            rules={[{ required: true, message: t('debtors.enterFullName', { defaultValue: 'Введите ФИО должника' }) }]}
           >
-            <Input placeholder="Введите ФИО должника" />
+            <Input placeholder={t('debtors.enterFullName', { defaultValue: 'Введите ФИО должника' })} />
           </Form.Item>
           
           <Form.Item
-            label="Телефон"
+            label={t('common.phone')}
             name="phone"
-            rules={[{ required: true, message: 'Введите номер телефона' }]}
+            rules={[{ required: true, message: t('debtors.enterPhone', { defaultValue: 'Введите номер телефона' }) }]}
           >
-            <Input placeholder="Введите номер телефона" />
+            <Input placeholder={t('debtors.enterPhone', { defaultValue: 'Введите номер телефона' })} />
           </Form.Item>
           
           <Form.Item
-            label="Сумма долга"
+            label={t('debtors.debtAmount')}
             name="debt_amount"
             rules={[
-              { required: true, message: 'Введите сумму долга' },
+              { required: true, message: t('debtors.enterDebtAmount', { defaultValue: 'Введите сумму долга' }) },
               { type: 'number', min: 0, message: 'Сумма не может быть отрицательной' }
             ]}
           >
@@ -569,7 +571,7 @@ export const Debtors = () => {
       </Modal>
 
       <Modal
-        title={operationType === 'BORROWED' ? 'Создать операцию займа' : 'Создать операцию возврата'}
+        title={operationType === 'BORROWED' ? t('debtors.createBorrowOperation') : t('debtors.createReturnOperation')}
         open={operationModalVisible}
         onCancel={() => {
           setOperationModalVisible(false);
@@ -580,10 +582,10 @@ export const Debtors = () => {
             setOperationModalVisible(false);
             operationForm.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => operationForm.submit()}>
-            Создать
+            {t('common.create')}
           </Button>,
         ]}
         width={600}
@@ -631,10 +633,10 @@ export const Debtors = () => {
           </Form.Item>
           
           <Form.Item
-            label="Описание"
+            label={t('common.description')}
             name="description">
             <TextArea
-              placeholder="Введите описание операции (необязательно)"
+              placeholder={t('debtors.enterDescription', { defaultValue: 'Введите описание операции (необязательно)' })}
               rows={3}
             />
           </Form.Item>

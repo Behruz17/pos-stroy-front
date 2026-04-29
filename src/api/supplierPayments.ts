@@ -12,6 +12,7 @@ export interface SupplierPayment {
 export interface CreateSupplierPaymentRequest {
   supplier_id: number;
   sum: number;
+  account_id?: number;
 }
 
 export interface CreateSupplierPaymentResponse {

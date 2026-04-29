@@ -58,8 +58,8 @@ export const CustomerOperations = () => {
   const handleRowClick = async (record: CustomerOperation) => {
     setSelectedOperation(record);
     
-    // If it's a DEBT or PAID operation with sale_id, fetch the sale details with items
-    if ((record.type === 'DEBT' || record.type === 'PAID') && record.sale_id) {
+    // If it's a DEBT, PAID, or PARTIAL operation with sale_id, fetch the sale details with items
+    if ((record.type === 'DEBT' || record.type === 'PAID' || record.type === 'PARTIAL') && record.sale_id) {
       setLoadingSale(true);
       try {
         const saleData = await salesApi.getById(record.sale_id);
@@ -87,7 +87,8 @@ export const CustomerOperations = () => {
     switch (type) {
       case 'DEBT': return 'red';
       case 'PAID': return 'green';
-      case 'PAYMENT': return 'blue';
+      case 'PARTIAL': return 'blue';
+      case 'PAYMENT': return 'cyan';
       case 'RETURN': return 'orange';
       default: return 'default';
     }
@@ -97,6 +98,7 @@ export const CustomerOperations = () => {
     switch (type) {
       case 'DEBT': return 'Долг';
       case 'PAID': return 'Оплачено';
+      case 'PARTIAL': return 'Частично';
       case 'PAYMENT': return 'Платёж';
       case 'RETURN': return 'Возврат';
       default: return type;
@@ -179,6 +181,7 @@ export const CustomerOperations = () => {
             >
               <Option value="DEBT">Долг</Option>
               <Option value="PAID">Оплачено</Option>
+              <Option value="PARTIAL">Частично</Option>
               <Option value="PAYMENT">Платёж</Option>
               <Option value="RETURN">Возврат</Option>
             </Select>
@@ -215,7 +218,7 @@ export const CustomerOperations = () => {
         ]}
         width={600}
       >
-        {selectedOperation && (selectedOperation.type === 'DEBT' || selectedOperation.type === 'PAID') ? (
+        {selectedOperation && (selectedOperation.type === 'DEBT' || selectedOperation.type === 'PAID' || selectedOperation.type === 'PARTIAL') ? (
           <div>
             {loadingSale ? (
               <div style={{ textAlign: 'center', padding: 20 }}>
@@ -236,10 +239,10 @@ export const CustomerOperations = () => {
                     ellipsis: true,
                   },
                   {
-                    title: 'Код',
-                    dataIndex: 'product_code',
-                    key: 'product_code',
-                    width: 100,
+                    title: 'ID',
+                    dataIndex: 'product_id',
+                    key: 'product_id',
+                    width: 80,
                   },
                   {
                     title: 'Кол-во',

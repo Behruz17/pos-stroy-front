@@ -1,0 +1,68 @@
+.receipt-modal {
+  width: fit-content;
+}
+
+@media (max-width: 768px) {
+  .receipt-modal {
+    width: 100% !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    max-width: 100vw !important;
+    top: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  .receipt-modal .ant-modal-content {
+    height: 100vh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  .receipt-modal .ant-modal-body {
+    height: calc(100vh - 100px) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+  }
+  
+  .receipt-modal .ant-modal-footer {
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+}
+
+.receipt-content {
+  padding: 20px;
+  font-family: 'Caveat', cursive;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+  color: #333;
+  background: white;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  min-height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .receipt-content {
+    padding: 15px;
+    font-size: 16px;
+    max-width: 100%;
+    width: 100%;
+    height: calc(100vh - 100px);
+    overflow: hidden;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  
+  .receipt-content * {
+    max-width: 100%;
+    word-wrap: break-word;
+    box-sizing: border-box;
+  }
+}

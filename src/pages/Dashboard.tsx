@@ -1,72 +1,48 @@
 import { useState, useEffect } from 'react'
 import { Card, Typography, Row, Col, Statistic, message } from 'antd'
 import { 
-  ShoppingCartOutlined, 
-  DollarOutlined, 
-  UserOutlined, 
-  ShopOutlined, 
-  RiseOutlined,
-  FallOutlined,
-  WalletOutlined
+  CheckCircleOutlined,
+  TruckOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons'
-import { 
-  salesApi, 
-  customerPaymentsApi, 
-  supplierPaymentsApi, 
-  stockReceiptsApi,
-  customersApi,
-  suppliersApi,
-  productsApi
-} from '../api'
+import { salesApi } from '../api'
+import dayjs from 'dayjs'
 
 const { Title } = Typography
 
 export const Dashboard = () => {
-  const [stats, setStats] = useState({
-    totalSales: 0,
-    totalCustomers: 0,
-    totalSuppliers: 0,
-    totalProducts: 0,
-    totalCustomerPayments: 0,
-    totalSupplierPayments: 0,
-    totalStockReceipts: 0,
-    lowStockProducts: 0
+  const [todayStats, setTodayStats] = useState({
+    ordered: 0,
+    ready: 0,
+    delivered: 0
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchTodayStats = async () => {
       try {
-        const [sales, customers, suppliers, products, customerPayments, supplierPayments, stockReceipts] = await Promise.all([
-          salesApi.getAll().catch(() => []),
-          customersApi.getAll().catch(() => []),
-          suppliersApi.getAll().catch(() => []),
-          productsApi.getAll().catch(() => []),
-          customerPaymentsApi.getAll().catch(() => []),
-          supplierPaymentsApi.getAll().catch(() => []),
-          stockReceiptsApi.getAll().catch(() => [])
-        ])
+        const today = dayjs().format('YYYY-MM-DD')
+        const sales = await salesApi.getAll().catch(() => [])
 
-        const lowStock = products.filter((p: any) => p.stock_quantity <= 10).length
+        // Filter sales created today
+        const todaySales = Array.isArray(sales) 
+          ? sales.filter((sale: any) => dayjs(sale.created_at).format('YYYY-MM-DD') === today)
+          : []
 
-        setStats({
-          totalSales: Array.isArray(sales) ? sales.length : 0,
-          totalCustomers: Array.isArray(customers) ? customers.length : 0,
-          totalSuppliers: Array.isArray(suppliers) ? suppliers.length : 0,
-          totalProducts: Array.isArray(products) ? products.length : 0,
-          totalCustomerPayments: Array.isArray(customerPayments) ? customerPayments.length : 0,
-          totalSupplierPayments: Array.isArray(supplierPayments) ? supplierPayments.length : 0,
-          totalStockReceipts: Array.isArray(stockReceipts) ? stockReceipts.length : 0,
-          lowStockProducts: lowStock
-        })
+        // Count by stage
+        const ordered = todaySales.filter((sale: any) => sale.stage === 'ordered').length
+        const ready = todaySales.filter((sale: any) => sale.stage === 'ready').length
+        const delivered = todaySales.filter((sale: any) => sale.stage === 'delivered').length
+
+        setTodayStats({ ordered, ready, delivered })
       } catch (error) {
-        message.error('Ошибка при загрузке статистики')
+        message.error('Ошибка при загрузке статистики заказов')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchStats()
+    fetchTodayStats()
   }, [])
 
   return (
@@ -77,20 +53,9 @@ export const Dashboard = () => {
         <Col xs={24} sm={12} md={8}>
           <Card>
             <Statistic
-              title="Всего продаж"
-              value={stats.totalSales}
-              prefix={<DollarOutlined />}
-              valueStyle={{ color: '#3f8600' }}
-              loading={loading}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card>
-            <Statistic
-              title="Клиенты"
-              value={stats.totalCustomers}
-              prefix={<UserOutlined />}
+              title="Заказано сегодня"
+              value={todayStats.ordered}
+              prefix={<ClockCircleOutlined />}
               valueStyle={{ color: '#1890ff' }}
               loading={loading}
             />
@@ -99,76 +64,26 @@ export const Dashboard = () => {
         <Col xs={24} sm={12} md={8}>
           <Card>
             <Statistic
-              title="Поставщики"
-              value={stats.totalSuppliers}
-              prefix={<ShopOutlined />}
+              title="Готово сегодня"
+              value={todayStats.ready}
+              prefix={<CheckCircleOutlined />}
               valueStyle={{ color: '#52c41a' }}
               loading={loading}
             />
           </Card>
         </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} sm={12} md={8}>
           <Card>
             <Statistic
-              title="Товары"
-              value={stats.totalProducts}
-              prefix={<ShoppingCartOutlined />}
+              title="Доставлено сегодня"
+              value={todayStats.delivered}
+              prefix={<TruckOutlined />}
               valueStyle={{ color: '#722ed1' }}
               loading={loading}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card>
-            <Statistic
-              title="Приходы"
-              value={stats.totalStockReceipts}
-              prefix={<RiseOutlined />}
-              valueStyle={{ color: '#13c2c2' }}
-              loading={loading}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card>
-            <Statistic
-              title="Оплаты клиентов"
-              value={stats.totalCustomerPayments}
-              prefix={<WalletOutlined />}
-              valueStyle={{ color: '#faad14' }}
-              loading={loading}
-            />
-          </Card>
-        </Col>
       </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} sm={12} md={8}>
-          <Card>
-            <Statistic
-              title="Оплаты поставщикам"
-              value={stats.totalSupplierPayments}
-              prefix={<WalletOutlined />}
-              valueStyle={{ color: '#faad14' }}
-              loading={loading}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card>
-            <Statistic
-              title="Товары с малым остатком"
-              value={stats.lowStockProducts}
-              prefix={<FallOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-              loading={loading}
-            />
-          </Card>
-        </Col>
-              </Row>
     </div>
   )
 }

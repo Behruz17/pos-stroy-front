@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag } from 'antd';
 import { DeleteOutlined, PlusOutlined, SearchOutlined, DollarOutlined, UserOutlined } from '@ant-design/icons';
-import { customerPaymentsApi, customersApi, type CustomerPayment, type CreateCustomerPaymentRequest, type Customer } from '../api';
+import { customerPaymentsApi, customersApi, accountsApi, type CustomerPayment, type CreateCustomerPaymentRequest, type Customer, type Account } from '../api';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -14,6 +14,23 @@ export const CustomerPayments = () => {
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number>(1);
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+      const cashAccount = data.find(a => a.type === 'CASH' && a.status === 1);
+      if (cashAccount) {
+        setSelectedAccountId(cashAccount.id);
+      } else if (data.length > 0) {
+        setSelectedAccountId(data[0].id);
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  };
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -44,6 +61,7 @@ export const CustomerPayments = () => {
   useEffect(() => {
     fetchPayments();
     fetchCustomers();
+    fetchAccounts();
   }, []);
 
   const handleSearch = (value: string) => {
@@ -73,6 +91,7 @@ export const CustomerPayments = () => {
       const createData: CreateCustomerPaymentRequest = {
         customer_id: values.customer_id,
         sum: values.sum,
+        account_id: selectedAccountId,
       };
 
       await customerPaymentsApi.create(createData);
@@ -256,6 +275,22 @@ export const CustomerPayments = () => {
               style={{ width: '100%' }}
               prefix={<DollarOutlined />}
             />
+          </Form.Item>
+
+          <Form.Item
+            label="Счет оплаты"
+          >
+            <Select
+              value={selectedAccountId}
+              onChange={(value) => setSelectedAccountId(value)}
+              style={{ width: '100%' }}
+            >
+              {accounts.map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.name} ({account.type === 'CASH' ? 'Наличные' : 'Электронный'}) - {account.current_balance.toLocaleString()}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
         </Form>
       </Modal>

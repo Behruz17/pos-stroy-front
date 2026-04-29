@@ -230,10 +230,10 @@ export const SupplierOperations = () => {
                     ellipsis: true,
                   },
                   {
-                    title: 'Код',
-                    dataIndex: 'product_code',
-                    key: 'product_code',
-                    width: 100,
+                    title: 'ID',
+                    dataIndex: 'product_id',
+                    key: 'product_id',
+                    width: 80,
                   },
                   {
                     title: 'Кол-во',
@@ -248,7 +248,7 @@ export const SupplierOperations = () => {
                     key: 'purchase_cost',
                     width: 100,
                     align: 'right',
-                    render: (cost: number) => cost.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
+                    render: (cost: number | null) => cost ? cost.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }) : '-',
                   },
                   {
                     title: 'Продажа',
@@ -256,7 +256,7 @@ export const SupplierOperations = () => {
                     key: 'selling_price',
                     width: 100,
                     align: 'right',
-                    render: (price: number) => price.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
+                    render: (price: number | null) => price ? price.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }) : '-',
                   },
                 ]}
               />

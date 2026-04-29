@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { EditOutlined, DeleteOutlined, TeamOutlined, PlusOutlined, PhoneOutlined, SearchOutlined, AccountBookOutlined, DollarOutlined, ShopOutlined } from '@ant-design/icons';
-import { suppliersApi, supplierOperationsApi, stockReceiptsApi, supplierPaymentsApi, type Supplier, type CreateSupplierRequest, type SupplierOperation, type SupplierOperationFilters, type StockReceipt, type SupplierPayment, type CreateSupplierPaymentRequest } from '../api';
+import { suppliersApi, supplierOperationsApi, stockReceiptsApi, supplierPaymentsApi, accountsApi, type Supplier, type CreateSupplierRequest, type SupplierOperation, type SupplierOperationFilters, type StockReceipt, type SupplierPayment, type CreateSupplierPaymentRequest, type Account } from '../api';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
 const { Option } = Select;
 
 export const Suppliers = () => {
+  const { t } = useTranslation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,24 @@ export const Suppliers = () => {
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [paymentsForm] = Form.useForm();
   const [paymentSuppliers, setPaymentSuppliers] = useState<Supplier[]>([]);
-  
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number>(1);
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+      const cashAccount = data.find(a => a.type === 'CASH' && a.status === 1);
+      if (cashAccount) {
+        setSelectedAccountId(cashAccount.id);
+      } else if (data.length > 0) {
+        setSelectedAccountId(data[0].id);
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'suppliers' | 'operations' | 'payments'>('suppliers');
 
   const fetchSuppliers = async () => {
@@ -49,9 +68,9 @@ export const Suppliers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка при загрузке поставщиков');
+        message.error(t('suppliers.errorLoading', { defaultValue: 'Ошибка при загрузке поставщиков' }));
       }
     } finally {
       setLoading(false);
@@ -66,9 +85,9 @@ export const Suppliers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки операций поставщиков');
+        message.error(t('suppliers.operationsErrorLoading', { defaultValue: 'Ошибка загрузки операций поставщиков' }));
       }
     } finally {
       setOperationsLoading(false);
@@ -83,9 +102,9 @@ export const Suppliers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки оплат');
+        message.error(t('suppliers.paymentsErrorLoading', { defaultValue: 'Ошибка загрузки оплат' }));
       }
     } finally {
       setPaymentsLoading(false);
@@ -97,7 +116,7 @@ export const Suppliers = () => {
       const data = await suppliersApi.getAll();
       setPaymentSuppliers(data);
     } catch (error: unknown) {
-      message.error('Ошибка загрузки поставщиков');
+      message.error(t('suppliers.errorLoading'));
     }
   };
 
@@ -112,6 +131,7 @@ export const Suppliers = () => {
 
   useEffect(() => {
     fetchSuppliers();
+    fetchAccounts();
   }, []);
 
   useEffect(() => {
@@ -126,14 +146,14 @@ export const Suppliers = () => {
   const handleDelete = async (id: number) => {
     try {
       await suppliersApi.delete(id);
-      message.success('Поставщик удален');
+      message.success(t('suppliers.supplierDeleted', { defaultValue: 'Поставщик удален' }));
       fetchSuppliers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } } };
       if (axiosError.response?.status === 404) {
-        message.error('Поставщик не найден');
+        message.error(t('errors.notFound'));
       } else {
-        message.error('Ошибка при удалении поставщика');
+        message.error(t('suppliers.errorDeleting', { defaultValue: 'Ошибка при удалении поставщика' }));
       }
     }
   };
@@ -142,18 +162,18 @@ export const Suppliers = () => {
     setCreating(true);
     try {
       await suppliersApi.create(values);
-      message.success('Поставщик успешно создан');
+      message.success(t('suppliers.supplierCreated', { defaultValue: 'Поставщик успешно создан' }));
       setModalVisible(false);
       form.resetFields();
       fetchSuppliers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Поле name обязательно');
+        message.error(axiosError.response.data?.message || t('errors.required'));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при создании поставщика');
+        message.error(t('suppliers.errorCreating', { defaultValue: 'Ошибка при создании поставщика' }));
       }
     } finally {
       setCreating(false);
@@ -181,7 +201,7 @@ export const Suppliers = () => {
     setEditing(true);
     try {
       await suppliersApi.update(editingSupplier.id, values);
-      message.success('Поставщик успешно обновлен');
+      message.success(t('suppliers.supplierUpdated', { defaultValue: 'Поставщик успешно обновлен' }));
       setEditModalVisible(false);
       setEditingSupplier(null);
       form.resetFields();
@@ -189,11 +209,11 @@ export const Suppliers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Ошибка при обновлении поставщика');
+        message.error(axiosError.response.data?.message || t('suppliers.errorUpdating', { defaultValue: 'Ошибка при обновлении поставщика' }));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при обновлении поставщика');
+        message.error(t('suppliers.errorUpdating', { defaultValue: 'Ошибка при обновлении поставщика' }));
       }
     } finally {
       setEditing(false);
@@ -227,7 +247,7 @@ export const Suppliers = () => {
         const receiptData = await stockReceiptsApi.getById(record.receipt_id);
         setReceiptDetails(receiptData);
       } catch (error: unknown) {
-        message.error('Ошибка при загрузке деталей прихода');
+        message.error(t('stockReceipts.errorLoadingDetails', { defaultValue: 'Ошибка при загрузке деталей прихода' }));
         setReceiptDetails(null);
       } finally {
         setLoadingReceipt(false);
@@ -269,16 +289,16 @@ export const Suppliers = () => {
   const handleDeletePayment = async (id: number) => {
     try {
       await supplierPaymentsApi.delete(id);
-      message.success('Оплата успешно удалена');
+      message.success(t('payments.paymentDeleted', { defaultValue: 'Оплата успешно удалена' }));
       fetchPayments();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } } };
       if (axiosError.response?.status === 404) {
-        message.error(axiosError.response.data?.message || 'Оплата не найдена');
+        message.error(axiosError.response.data?.message || t('payments.paymentNotFound', { defaultValue: 'Оплата не найдена' }));
       } else if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Нельзя удалить эту оплату');
+        message.error(axiosError.response.data?.message || t('payments.cannotDelete', { defaultValue: 'Нельзя удалить эту оплату' }));
       } else {
-        message.error('Ошибка удаления оплаты');
+        message.error(t('payments.errorDeleting', { defaultValue: 'Ошибка удаления оплаты' }));
       }
     }
   };
@@ -289,10 +309,11 @@ export const Suppliers = () => {
       const createData: CreateSupplierPaymentRequest = {
         supplier_id: values.supplier_id,
         sum: values.sum,
+        account_id: selectedAccountId,
       };
 
       await supplierPaymentsApi.create(createData);
-      message.success('Оплата успешно создана');
+      message.success(t('payments.paymentCreated', { defaultValue: 'Оплата успешно создана' }));
       setPaymentsModalVisible(false);
       paymentsForm.resetFields();
       fetchPayments();
@@ -303,9 +324,9 @@ export const Suppliers = () => {
         const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Проверьте обязательные поля';
         message.error(errorMessage);
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка создания оплаты');
+        message.error(t('payments.errorCreating', { defaultValue: 'Ошибка создания оплаты' }));
       }
     } finally {
       setCreatingPayment(false);
@@ -341,7 +362,7 @@ export const Suppliers = () => {
       key: 'balance',
       render: (balance: number, record: Supplier) => (
         <span>
-          {balance.toLocaleString()} {record.currency}
+          {balance ? balance.toLocaleString() : '0'} {record.currency || ''}
         </span>
       ),
     },
@@ -405,7 +426,7 @@ export const Suppliers = () => {
       key: 'sum',
       render: (sum: number) => (
         <span style={{ color: '#52c41a' }}>
-          {sum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+          {sum ? sum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }) : '0 ₽'}
         </span>
       ),
     },
@@ -437,18 +458,9 @@ export const Suppliers = () => {
       render: (amount: number) => (
         <span style={{ color: '#52c41a' }}>
           <DollarOutlined style={{ marginRight: 4 }} />
-          {amount.toLocaleString()}
+          {amount ? amount.toLocaleString() : '0'}
         </span>
       ),
-    },
-    {
-      title: 'Тип',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => (
-        <Tag color="blue">{type}</Tag>
-      ),
-      width: 100,
     },
     {
       title: 'Действия',
@@ -500,7 +512,7 @@ export const Suppliers = () => {
               icon={<DollarOutlined />}
               onClick={() => setActiveTab('payments')}
             >
-              Оплаты поставщикам
+              {t('suppliers.payments')}
             </Button>
           </Col>
         </Row>
@@ -512,7 +524,7 @@ export const Suppliers = () => {
             <Row gutter={[16, 16]} align="middle">
               <Col xs={24} sm={12} md={16}>
                 <Input
-                  placeholder="Поиск поставщиков..."
+                  placeholder={t('suppliers.searchPlaceholder', { defaultValue: 'Поиск поставщиков...' })}
                   prefix={<SearchOutlined />}
                   value={searchText}
                   onChange={(e) => handleSearch(e.target.value)}
@@ -526,7 +538,7 @@ export const Suppliers = () => {
                   onClick={handleCreateModal}
                   style={{ width: '100%' }}
                 >
-                  Добавить поставщика
+                  {t('suppliers.addSupplier')}
                 </Button>
               </Col>
             </Row>
@@ -550,7 +562,7 @@ export const Suppliers = () => {
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={12} md={8}>
                 <Input
-                  placeholder="Поиск по имени поставщика..."
+                  placeholder={t('suppliers.searchByNamePlaceholder', { defaultValue: 'Поиск по имени поставщика...' })}
                   value={operationsSearchText}
                   onChange={(e) => handleOperationsSearch(e.target.value)}
                   prefix={<SearchOutlined />}
@@ -560,7 +572,7 @@ export const Suppliers = () => {
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <DatePicker
-                  placeholder="Фильтр по дате"
+                  placeholder={t('common.filterByDate')}
                   value={operationsFilters.date ? dayjs(operationsFilters.date) : null}
                   onChange={(date) => handleOperationsFilterChange('date', date)}
                   style={{ width: '100%' }}
@@ -569,14 +581,14 @@ export const Suppliers = () => {
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <Select
-                  placeholder="Тип операции"
+                  placeholder={t('suppliers.operationType')}
                   value={operationsFilters.type}
                   onChange={(value) => handleOperationsFilterChange('type', value)}
                   style={{ width: '100%' }}
                   allowClear
                 >
-                  <Option value="RECEIPT">Приход</Option>
-                  <Option value="PAYMENT">Платёж</Option>
+                  <Option value="RECEIPT">{t('suppliers.receipt')}</Option>
+                  <Option value="PAYMENT">{t('suppliers.payment')}</Option>
                 </Select>
               </Col>
             </Row>
@@ -608,7 +620,7 @@ export const Suppliers = () => {
             <Row gutter={[16, 16]} align="middle">
               <Col xs={24} sm={12} md={16}>
                 <Input
-                  placeholder="Поиск оплат..."
+                  placeholder={t('suppliers.searchPaymentsPlaceholder', { defaultValue: 'Поиск оплат...' })}
                   prefix={<SearchOutlined />}
                   value={paymentsSearchText}
                   onChange={(e) => handlePaymentsSearch(e.target.value)}
@@ -622,7 +634,7 @@ export const Suppliers = () => {
                   onClick={handleCreatePaymentModal}
                   style={{ width: '100%' }}
                 >
-                  Добавить оплату
+                  {t('suppliers.addPayment')}
                 </Button>
               </Col>
             </Row>
@@ -644,7 +656,7 @@ export const Suppliers = () => {
       )}
 
       <Modal
-        title="Добавить поставщика"
+        title={t('suppliers.create')}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
@@ -655,10 +667,10 @@ export const Suppliers = () => {
             setModalVisible(false);
             form.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => form.submit()} loading={creating}>
-            Создать
+            {t('common.create')}
           </Button>,
         ]}
         width={600}
@@ -669,11 +681,11 @@ export const Suppliers = () => {
           onFinish={handleCreate}
         >
           <Form.Item
-            label="Наименование"
+            label={t('common.name')}
             name="name"
-            rules={[{ required: true, message: 'Введите наименование поставщика' }]}
+            rules={[{ required: true, message: t('suppliers.enterName', { defaultValue: 'Введите наименование поставщика' }) }]}
           >
-            <Input placeholder="Например: ООО Поставщик" prefix={<TeamOutlined />} />
+            <Input placeholder={t('suppliers.namePlaceholder', { defaultValue: 'Например: ООО Поставщик' })} prefix={<TeamOutlined />} />
           </Form.Item>
 
           <Form.Item
@@ -682,11 +694,23 @@ export const Suppliers = () => {
           >
             <Input placeholder="+992123456789" prefix={<PhoneOutlined />} />
           </Form.Item>
+
+          <Form.Item
+            label="Валюта"
+            name="currency"
+            initialValue="TJS"
+          >
+            <Select>
+              <Option value="TJS">TJS</Option>
+              <Option value="USD">USD</Option>
+              <Option value="RUB">RUB</Option>
+            </Select>
+          </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="Редактировать поставщика"
+        title={t('suppliers.edit')}
         open={editModalVisible}
         onCancel={() => {
           setEditModalVisible(false);
@@ -699,10 +723,10 @@ export const Suppliers = () => {
             setEditingSupplier(null);
             form.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
-            Обновить
+            {t('common.update')}
           </Button>,
         ]}
         width={600}
@@ -716,11 +740,11 @@ export const Suppliers = () => {
           size="large"
         >
           <Form.Item
-            label="Наименование"
+            label={t('common.name')}
             name="name"
-            rules={[{ required: true, message: 'Введите наименование поставщика' }]}
+            rules={[{ required: true, message: t('suppliers.enterName', { defaultValue: 'Введите наименование поставщика' }) }]}
           >
-            <Input placeholder="Введите наименование поставщика" prefix={<ShopOutlined />} />
+            <Input placeholder={t('suppliers.enterNamePlaceholder', { defaultValue: 'Введите наименование поставщика' })} prefix={<ShopOutlined />} />
           </Form.Item>
 
           <Form.Item
@@ -729,16 +753,27 @@ export const Suppliers = () => {
           >
             <Input placeholder="+992123456789" prefix={<PhoneOutlined />} />
           </Form.Item>
+
+          <Form.Item
+            label="Валюта"
+            name="currency"
+          >
+            <Select>
+              <Option value="TJS">TJS</Option>
+              <Option value="USD">USD</Option>
+              <Option value="RUB">RUB</Option>
+            </Select>
+          </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="Товары"
+        title={t('common.products')}
         open={operationsModalVisible}
         onCancel={handleCloseOperationsModal}
         footer={[
           <Button key="close" onClick={handleCloseOperationsModal}>
-            Закрыть
+            {t('common.close')}
           </Button>,
         ]}
         width={600}
@@ -758,57 +793,57 @@ export const Suppliers = () => {
                 scroll={{ x: 'max-content', y: 400 }}
                 columns={[
                   {
-                    title: 'Товар',
+                    title: t('common.product'),
                     dataIndex: 'product_name',
                     key: 'product_name',
                     ellipsis: true,
                   },
                   {
-                    title: 'Код',
-                    dataIndex: 'product_code',
-                    key: 'product_code',
-                    width: 100,
+                    title: t('common.id'),
+                    dataIndex: 'product_id',
+                    key: 'product_id',
+                    width: 80,
                   },
                   {
-                    title: 'Кол-во',
+                    title: t('common.quantityShort', { defaultValue: 'Кол-во' }),
                     dataIndex: 'quantity',
                     key: 'quantity',
                     width: 80,
                     align: 'right',
                   },
                   {
-                    title: 'Закупка',
+                    title: t('suppliers.purchaseCost', { defaultValue: 'Закупка' }),
                     dataIndex: 'purchase_cost',
                     key: 'purchase_cost',
                     width: 100,
                     align: 'right',
-                    render: (cost: number) => cost.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
+                    render: (cost: number | null) => cost ? cost.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }) : '-',
                   },
                   {
-                    title: 'Продажа',
+                    title: t('suppliers.sellingPrice', { defaultValue: 'Продажа' }),
                     dataIndex: 'selling_price',
                     key: 'selling_price',
                     width: 100,
                     align: 'right',
-                    render: (price: number) => price.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
+                    render: (price: number | null) => price ? price.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }) : '-',
                   },
                 ]}
               />
             ) : (
               <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-                Нет данных о товарах
+                {t('suppliers.noProductData', { defaultValue: 'Нет данных о товарах' })}
               </div>
             )}
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-            Для этой операции нет данных о товарах
+            {t('suppliers.noProductDataForOperation', { defaultValue: 'Для этой операции нет данных о товарах' })}
           </div>
         )}
       </Modal>
 
       <Modal
-        title="Добавить оплату поставщику"
+        title={t('suppliers.addPayment')}
         open={paymentsModalVisible}
         onCancel={() => {
           setPaymentsModalVisible(false);
@@ -819,10 +854,10 @@ export const Suppliers = () => {
             setPaymentsModalVisible(false);
             paymentsForm.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => paymentsForm.submit()} loading={creatingPayment}>
-            Создать
+            {t('common.create')}
           </Button>,
         ]}
         width={600}
@@ -833,11 +868,11 @@ export const Suppliers = () => {
           onFinish={handleCreatePayment}
         >
           <Form.Item
-            label="Поставщик"
+            label={t('suppliers.supplier')}
             name="supplier_id"
-            rules={[{ required: true, message: 'Выберите поставщика' }]}
+            rules={[{ required: true, message: t('suppliers.selectSupplier', { defaultValue: 'Выберите поставщика' }) }]}
           >
-            <Select placeholder="Выберите поставщика" prefix={<ShopOutlined />}>
+            <Select placeholder={t('suppliers.selectSupplier', { defaultValue: 'Выберите поставщика' })} prefix={<ShopOutlined />}>
               {paymentSuppliers.map(supplier => (
                 <Option key={supplier.id} value={supplier.id}>
                   {supplier.name}
@@ -847,21 +882,39 @@ export const Suppliers = () => {
           </Form.Item>
 
           <Form.Item
-            label="Сумма"
+            label={t('common.amount')}
             name="sum"
             rules={[
-              { required: true, message: 'Введите сумму' },
-              { type: 'number', min: 0.01, message: 'Сумма должна быть больше 0' }
+              { required: true, message: t('suppliers.enterAmount', { defaultValue: 'Введите сумму' }) },
+              { type: 'number', min: 0.01, message: t('suppliers.amountGreaterThanZero', { defaultValue: 'Сумма должна быть больше 0' }) }
             ]}
           >
             <InputNumber
-              placeholder="Сумма"
+              placeholder={t('common.amount')}
               min={0.01}
               step={0.01}
               precision={2}
               style={{ width: '100%' }}
               prefix={<DollarOutlined />}
             />
+          </Form.Item>
+
+          <Form.Item
+            label={t('suppliers.account', { defaultValue: 'Счет оплаты' })}
+            required
+          >
+            <Select
+              value={selectedAccountId}
+              onChange={(value) => setSelectedAccountId(value)}
+              style={{ width: '100%' }}
+              placeholder={t('suppliers.selectAccount', { defaultValue: 'Выберите счет' })}
+            >
+              {accounts.filter(a => a.status === 1).map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.name} ({account.type === 'CASH' ? t('accounts.cash', { defaultValue: 'Наличные' }) : t('accounts.electronic', { defaultValue: 'Электронный' })}) - {account.current_balance ? account.current_balance.toLocaleString() : '0'}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
         </Form>
       </Modal>

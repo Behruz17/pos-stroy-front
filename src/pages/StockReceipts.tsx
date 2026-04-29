@@ -1,20 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Typography, Card, message, Tabs, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag, Spin, DatePicker } from 'antd';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, ShopOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import { stockReceiptsApi, suppliersApi, productsApi, type StockReceipt, type StockReceiptItem, type CreateStockReceiptRequest, type Supplier, type Product } from '../api';
-
-interface CreateStockReceiptItem {
-  product_id: number;
-  quantity: number;
-  purchase_cost: number;
-  selling_price: number;
-}
+import { SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, ShopOutlined, DeleteOutlined, ClockCircleOutlined, SwapOutlined } from '@ant-design/icons';
+import { stockReceiptsApi, suppliersApi, productsApi, type StockReceipt, type CreateStockReceiptRequest, type CreateStockReceiptItem, type Supplier, type Product, type StockReceiptItem } from '../api';
 
 const { Title } = Typography;
 const { Option } = Select;
 
 export const StockReceipts = () => {
+  const { t } = useTranslation();
   const [stockReceipts, setStockReceipts] = useState<StockReceipt[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('list');
@@ -44,9 +39,9 @@ export const StockReceipts = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Requires authorization');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Error loading stock receipts');
+        message.error(t('stockReceipts.errorLoading', { defaultValue: 'Ошибка при загрузке приходов' }));
       }
     } finally {
       setLoading(false);
@@ -58,7 +53,7 @@ export const StockReceipts = () => {
       const data = await suppliersApi.getAll();
       setSuppliers(data);
     } catch (error: unknown) {
-      message.error('Ошибка при загрузке поставщиков');
+      message.error(t('suppliers.errorLoading', { defaultValue: 'Ошибка при загрузке поставщиков' }));
     }
   };
 
@@ -67,7 +62,7 @@ export const StockReceipts = () => {
       const data = await productsApi.getAll();
       setProducts(data);
     } catch (error: unknown) {
-      message.error('Ошибка при загрузке товаров');
+      message.error(t('products.errorLoading'));
     }
   };
 
@@ -93,7 +88,7 @@ export const StockReceipts = () => {
       const detailedReceipt = await stockReceiptsApi.getById(id);
       setSelectedReceipt(detailedReceipt);
     } catch (error: unknown) {
-      message.error('Ошибка при загрузке деталей прихода');
+      message.error(t('stockReceipts.errorLoadingDetails', { defaultValue: 'Ошибка при загрузке деталей прихода' }));
     } finally {
       setLoadingReceiptDetails(false);
     }
@@ -109,29 +104,40 @@ export const StockReceipts = () => {
     setCreating(true);
     try {
       if (receiptItems.length === 0) {
-        message.error('Добавьте хотя бы один товар');
+        message.error(t('sales.addAtLeastOneItem', { defaultValue: 'Добавьте хотя бы один товар' }));
+        return;
+      }
+
+      // Validate all items have product_id selected
+      const invalidItems = receiptItems.filter(item => !item.product_id || item.product_id <= 0);
+      if (invalidItems.length > 0) {
+        message.error('Выберите товар для всех позиций');
         return;
       }
 
       const createData: CreateStockReceiptRequest = {
         supplier_id: values.supplier_id,
+        currency: values.currency,
+        rate: values.currency !== 'TJS' ? values.rate : 1,
         items: receiptItems,
       };
 
+      console.log('Creating stock receipt with data:', createData);
       await stockReceiptsApi.create(createData);
-      message.success('Приход успешно создан');
+      message.success(t('stockReceipts.receiptCreated', { defaultValue: 'Приход успешно создан' }));
       form.resetFields();
       setReceiptItems([]);
       setActiveTab('list');
       fetchStockReceipts();
     } catch (error: unknown) {
-      const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
+      const axiosError = error as { response?: { status: number; data?: { message?: string; errors?: any } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Проверьте обязательные поля');
+        console.error('400 Error details:', axiosError.response.data);
+        message.error(axiosError.response.data?.message || t('errors.required'));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при создании прихода');
+        message.error(t('stockReceipts.errorCreating', { defaultValue: 'Ошибка при создании прихода' }));
       }
     } finally {
       setCreating(false);
@@ -149,8 +155,10 @@ export const StockReceipts = () => {
   };
 
   const updateReceiptItem = (index: number, field: keyof CreateStockReceiptItem, value: any) => {
+    console.log(`Before update - item ${index}:`, receiptItems[index]);
     const updatedItems = [...receiptItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
+    console.log(`After update - item ${index}:`, updatedItems[index]);
     setReceiptItems(updatedItems);
   };
 
@@ -167,70 +175,104 @@ export const StockReceipts = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: 'Дата',
+      title: t('common.date'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
-      title: 'Поставщик',
+      title: t('common.supplier'),
       dataIndex: 'supplier_name',
       key: 'supplier_name',
       ellipsis: true,
     },
     {
-      title: 'Общая сумма',
+      title: t('common.totalAmount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => (
+      render: (amount: number, record: StockReceipt) => (
         <span style={{ color: '#52c41a' }}>
           <DollarOutlined style={{ marginRight: 4 }} />
-          {amount.toLocaleString()}
+          {amount.toLocaleString()} {record.currency}
         </span>
+      ),
+    },
+    {
+      title: t('common.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 80,
+      render: (currency: string) => (
+        <Tag color={currency === 'TJS' ? 'green' : currency === 'USD' ? 'blue' : 'orange'}>
+          {currency}
+        </Tag>
       ),
     },
   ];
 
-  const itemColumns: TableProps<StockReceiptItem>['columns'] = [
+  const getItemColumns = (currency: string): TableProps<StockReceiptItem>['columns'] => [
     {
-      title: 'Товар',
+      title: t('common.product'),
       dataIndex: 'product_name',
       key: 'product_name',
       ellipsis: true,
     },
     {
-      title: 'Код',
-      dataIndex: 'product_code',
-      key: 'product_code',
-      width: 100,
+      title: 'Партия',
+      dataIndex: 'batch_code',
+      key: 'batch_code',
+      width: 140,
+      render: (code: string | null | undefined) => code || '-',
     },
     {
-      title: 'Количество',
+      title: t('common.id'),
+      dataIndex: 'product_id',
+      key: 'product_id',
+      width: 80,
+    },
+    {
+      title: t('common.quantity'),
       dataIndex: 'quantity',
       key: 'quantity',
       width: 80,
     },
     {
-      title: 'Цена закупки',
+      title: t('suppliers.purchasePrice'),
       dataIndex: 'purchase_cost',
       key: 'purchase_cost',
       render: (cost: number) => cost.toLocaleString(),
       width: 100,
     },
     {
-      title: 'Цена продажи',
+      title: t('stockReceipts.purchaseCostConverted', { defaultValue: 'Цена закупки (TJS)' }),
+      dataIndex: 'purchase_cost_converted',
+      key: 'purchase_cost_converted',
+      render: (cost: number | null | undefined) => {
+        if (!cost && cost !== 0) return '-';
+        return (
+          <span style={{ color: '#52c41a' }}>
+            {cost.toLocaleString()} TJS
+          </span>
+        );
+      },
+      width: 120,
+    },
+    {
+      title: t('suppliers.sellingPrice'),
       dataIndex: 'selling_price',
       key: 'selling_price',
       render: (price: number) => price.toLocaleString(),
       width: 100,
     },
     {
-      title: 'Сумма',
+      title: t('common.amount'),
       key: 'total',
-      render: (_, record: StockReceiptItem) => (
-        <strong>{(record.quantity * record.purchase_cost).toLocaleString()}</strong>
-      ),
-      width: 100,
+      render: (_, record: StockReceiptItem) => {
+        const qty = record?.quantity || 0;
+        const cost = record?.purchase_cost || 0;
+        return <strong>{(qty * cost).toLocaleString()} {currency || ''}</strong>;
+      },
+      width: 120,
     },
   ];
 
@@ -240,7 +282,7 @@ export const StockReceipts = () => {
       label: (
         <span>
           <TeamOutlined />
-          Список приходов
+          {t('stockReceipts.list')}
         </span>
       ),
       children: (
@@ -248,7 +290,7 @@ export const StockReceipts = () => {
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Input
-                placeholder="Поиск приходов..."
+                placeholder={t('stockReceipts.searchPlaceholder', { defaultValue: 'Поиск приходов...' })}
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => handleSearch(e.target.value)}
@@ -257,7 +299,7 @@ export const StockReceipts = () => {
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Select
-                placeholder="Фильтр по поставщику"
+                placeholder={t('stockReceipts.filterBySupplier', { defaultValue: 'Фильтр по поставщику' })}
                 value={selectedSupplier}
                 onChange={setSelectedSupplier}
                 allowClear
@@ -272,7 +314,7 @@ export const StockReceipts = () => {
             </Col>
             <Col xs={24} sm={12} md={12}>
               <DatePicker
-                placeholder="Фильтр по дате"
+                placeholder={t('common.filterByDate', { defaultValue: 'Фильтр по дате' })}
                 value={selectedDate ? dayjs(selectedDate) : null}
                 onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
                 style={{ width: '100%' }}
@@ -308,7 +350,7 @@ export const StockReceipts = () => {
       label: (
         <span>
           <PlusOutlined />
-          Создать приход
+          {t('stockReceipts.create')}
         </span>
       ),
       children: (
@@ -316,7 +358,7 @@ export const StockReceipts = () => {
           <Col xs={24} sm={24} md={20} lg={16} xl={12}>
             <Card>
               <Title level={4} style={{ textAlign: 'center', marginBottom: 24 }}>
-                <ShoppingCartOutlined /> Новый приход
+                <ShoppingCartOutlined /> {t('stockReceipts.newReceipt')}
               </Title>
               <Form
                 form={form}
@@ -326,21 +368,76 @@ export const StockReceipts = () => {
                 layout="vertical"
                 size="large"
               >
+                <Row gutter={16}>
+                  <Col xs={24} sm={16}>
+                    <Form.Item
+                      name="supplier_id"
+                      label={t('stockReceipts.supplier')}
+                      rules={[{ required: true, message: t('stockReceipts.selectSupplier', { defaultValue: 'Выберите поставщика' }) }]}
+                    >
+                      <Select
+                        placeholder={t('stockReceipts.selectSupplier', { defaultValue: 'Выберите поставщика' })}
+                        prefix={<ShopOutlined />}
+                        onChange={(value) => {
+                          const supplier = suppliers.find(s => s.id === value);
+                          if (supplier?.currency) {
+                            form.setFieldValue('currency', supplier.currency);
+                          }
+                        }}
+                      >
+                        {suppliers.map(supplier => (
+                          <Option key={supplier.id} value={supplier.id}>
+                            {supplier.name} ({supplier.currency})
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={8}>
+                    <Form.Item
+                      name="currency"
+                      label={t('common.currency')}
+                      initialValue="TJS"
+                    >
+                      <Select disabled>
+                        <Option value="TJS">TJS</Option>
+                        <Option value="USD">USD</Option>
+                        <Option value="RUB">RUB</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+
                 <Form.Item
-                  name="supplier_id"
-                  label="Поставщик"
-                  rules={[{ required: true, message: 'Выберите поставщика' }]}
+                  noStyle
+                  shouldUpdate={(prevValues, currentValues) =>
+                    prevValues.currency !== currentValues.currency ||
+                    prevValues.supplier_id !== currentValues.supplier_id
+                  }
                 >
-                  <Select placeholder="Выберите поставщика" prefix={<ShopOutlined />}>
-                    {suppliers.map(supplier => (
-                      <Option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </Option>
-                    ))}
-                  </Select>
+                  {({ getFieldValue }) => {
+                    const currency = getFieldValue('currency');
+                    return currency !== 'TJS' ? (
+                      <Form.Item
+                        name="rate"
+                        label={t('common.rate')}
+                        rules={[{ required: true, message: t('errors.required') }]}
+                        initialValue={1}
+                      >
+                        <InputNumber
+                          min={0.001}
+                          step={0.001}
+                          precision={0}
+                          style={{ width: '100%' }}
+                          prefix={<SwapOutlined />}
+                          placeholder={t('stockReceipts.enterRate', { defaultValue: 'Введите курс к TJS' })}
+                        />
+                      </Form.Item>
+                    ) : null;
+                  }}
                 </Form.Item>
 
-                <Form.Item label="Товары">
+                <Form.Item label={t('stockReceipts.items')}>
                   <div style={{ marginBottom: 16 }}>
                     <Button
                       type="dashed"
@@ -348,7 +445,7 @@ export const StockReceipts = () => {
                       icon={<PlusOutlined />}
                       block
                     >
-                      Добавить товар
+                      {t('stockReceipts.addItem')}
                     </Button>
                   </div>
                   
@@ -357,7 +454,7 @@ export const StockReceipts = () => {
                       key={index}
                       size="small"
                       style={{ marginBottom: 16 }}
-                      title={`Товар ${index + 1}`}
+                      title={`${t('common.product')} ${index + 1}`}
                       extra={
                         <Button
                           type="text"
@@ -370,17 +467,30 @@ export const StockReceipts = () => {
                       <Row gutter={16}>
                         <Col xs={24} sm={12}>
                           <Form.Item
-                            label="Товар"
+                            label={t('common.product')}
                             required
                           >
                             <Select
-                              placeholder="Выберите товар"
+                              placeholder={t('stockReceipts.selectProduct', { defaultValue: 'Выберите товар' })}
                               value={item.product_id || undefined}
-                              onChange={(value) => updateReceiptItem(index, 'product_id', value)}
+                              onChange={(value) => {
+                                console.log(`Updating item ${index} product_id to:`, value, 'type:', typeof value);
+                                updateReceiptItem(index, 'product_id', value);
+                                const selected = products.find(p => p.id === value);
+                                if (selected?.type !== 'batch') {
+                                  // Only update batch_code if it exists, don't override other fields
+                                  const currentItem = receiptItems[index];
+                                  if (currentItem.batch_code !== undefined) {
+                                    updateReceiptItem(index, 'batch_code', undefined);
+                                  }
+                                }
+                              }}
                               showSearch
-                              filterOption={(input, option) =>
-                            (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
-                          }
+                              status={!item.product_id || item.product_id <= 0 ? 'error' : undefined}
+                              filterOption={(input, option) => {
+                                const product = products.find(p => p.id === option?.value);
+                                return product?.name.toLowerCase().includes(input.toLowerCase()) ?? false;
+                              }}
                             >
                               {products.map(product => (
                                 <Option key={product.id} value={product.id}>
@@ -399,13 +509,28 @@ export const StockReceipts = () => {
                             </Select>
                           </Form.Item>
                         </Col>
+                        {(() => {
+                          const selectedProduct = products.find(p => p.id === item.product_id);
+                          if (selectedProduct?.type !== 'batch') return null;
+                          return (
+                            <Col xs={24} sm={12}>
+                              <Form.Item label={t('stockReceipts.batchCode', { defaultValue: 'Партия (batch_code)' })}>
+                                <Input
+                                  placeholder="Например: PARTY-A"
+                                  value={item.batch_code}
+                                  onChange={(e) => updateReceiptItem(index, 'batch_code', e.target.value)}
+                                />
+                              </Form.Item>
+                            </Col>
+                          );
+                        })()}
                         <Col xs={12} sm={6}>
                           <Form.Item
-                            label="Количество"
+                            label={t('common.quantity')}
                             required
                           >
                             <InputNumber
-                              placeholder="Кол-во"
+                              placeholder={t('stockReceipts.quantityPlaceholder', { defaultValue: 'Кол-во' })}
                               min={1}
                               value={item.quantity}
                               onChange={(value) => updateReceiptItem(index, 'quantity', value || 1)}
@@ -415,11 +540,11 @@ export const StockReceipts = () => {
                         </Col>
                         <Col xs={12} sm={6}>
                           <Form.Item
-                            label="Цена закупки"
+                            label={t('stockReceipts.purchaseCost')}
                             required
                           >
                             <InputNumber
-                              placeholder="Цена"
+                              placeholder={t('common.price')}
                               min={0}
                               step={0.01}
                               value={item.purchase_cost || undefined}
@@ -428,13 +553,13 @@ export const StockReceipts = () => {
                             />
                           </Form.Item>
                         </Col>
-                        <Col xs={24} sm={12}>
+                        <Col xs={12} sm={6}>
                           <Form.Item
-                            label="Цена продажи"
+                            label={t('stockReceipts.sellingPrice')}
                             required
                           >
                             <InputNumber
-                              placeholder="Цена"
+                              placeholder={t('common.price')}
                               min={0}
                               step={0.01}
                               value={item.selling_price || undefined}
@@ -443,6 +568,33 @@ export const StockReceipts = () => {
                             />
                           </Form.Item>
                         </Col>
+                        <Form.Item
+                          noStyle
+                          shouldUpdate={(prevValues, currentValues) =>
+                            prevValues.currency !== currentValues.currency ||
+                            prevValues.rate !== currentValues.rate
+                          }
+                        >
+                          {({ getFieldValue }) => {
+                            const currency = getFieldValue('currency');
+                            const rate = getFieldValue('rate') || 1;
+                            const convertedPrice = currency !== 'TJS' && item.purchase_cost ? item.purchase_cost * rate : null;
+                            return currency !== 'TJS' ? (
+                              <Col xs={12} sm={6}>
+                                <Form.Item
+                                  label={t('stockReceipts.purchaseCostConverted', { defaultValue: 'Цена закупки (TJS)' })}
+                                >
+                                  <InputNumber
+                                    value={convertedPrice}
+                                    disabled
+                                    style={{ width: '100%' }}
+                                    formatter={(value) => `${value?.toLocaleString()} TJS`}
+                                  />
+                                </Form.Item>
+                              </Col>
+                            ) : null;
+                          }}
+                        </Form.Item>
                       </Row>
                     </Card>
                   ))}
@@ -457,7 +609,7 @@ export const StockReceipts = () => {
                     block
                     size="large"
                   >
-                    Создать приход
+                    {t('stockReceipts.create')}
                   </Button>
                 </Form.Item>
               </Form>
@@ -470,7 +622,7 @@ export const StockReceipts = () => {
 
   return (
     <div>
-      <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>Приходы</Title>
+      <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>{t('stockReceipts.title')}</Title>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -478,7 +630,7 @@ export const StockReceipts = () => {
       />
 
       <Modal
-        title={`Приход #${selectedReceipt?.id} - Детали`}
+        title={`${t('stockReceipts.receipt')} #${selectedReceipt?.id} - ${t('common.details')}`}
         open={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={null}
@@ -499,20 +651,23 @@ export const StockReceipts = () => {
               </Col>
               <Col span={8}>
                 <Tag color="orange" icon={<DollarOutlined />}>
-                  Сумма: {selectedReceipt.total_amount.toLocaleString()}
+                  {t('common.total')}: {selectedReceipt.total_amount.toLocaleString()} {selectedReceipt.currency}
+                  {/* {selectedReceipt.currency !== 'TJS' && selectedReceipt.total_amount_converted && (
+                    <> | {selectedReceipt.total_amount_converted.toFixed(2).toLocaleString()} TJS</>
+                  )} */}
                 </Tag>
               </Col>
-            </Row>
+                          </Row>
             
             {loadingReceiptDetails ? (
               <div style={{ textAlign: 'center', padding: 20 }}>
                 <Spin size="large" />
-                <div style={{ marginTop: 8 }}>Загрузка товаров...</div>
+                <div style={{ marginTop: 8 }}>{t('common.loading')}...</div>
               </div>
             ) : (
               <Table
-                columns={itemColumns}
-                dataSource={selectedReceipt.items || []}
+                columns={getItemColumns(selectedReceipt.currency)}
+                dataSource={selectedReceipt.items}
                 rowKey="id"
                 pagination={false}
                 scroll={{ x: 'max-content' }}

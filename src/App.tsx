@@ -13,6 +13,13 @@ import { Sales } from './pages/Sales'
 import { Returns } from './pages/Returns'
 import { Expenses } from './pages/Expenses'
 import { Debtors } from './pages/Debtors'
+import { Salaries } from './pages/Salaries'
+import { Accounts } from './pages/Accounts'
+import { Reports } from './pages/Reports'
+import { DailySummaryPage } from './pages/DailySummary'
+import { Conversions } from './pages/Conversions'
+import { ExchangeRates } from './pages/ExchangeRates'
+import { Employees } from './pages/Employees'
 
 function App() {
   return (
@@ -80,7 +87,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
-                        <Route
+                                    <Route
               path="/returns"
               element={
                 <ProtectedRoute>
@@ -104,7 +111,63 @@ function App() {
                 </ProtectedRoute>
               }
             />
-                        {/* Redirects */}
+            <Route
+              path="/salaries"
+              element={
+                <ProtectedRoute>
+                  <Salaries />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/accounts"
+              element={
+                <ProtectedRoute>
+                  <Accounts />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute>
+                  <Reports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/daily-summary"
+              element={
+                <ProtectedRoute>
+                  <DailySummaryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/conversions"
+              element={
+                <ProtectedRoute>
+                  <Conversions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exchange-rates"
+              element={
+                <ProtectedRoute>
+                  <ExchangeRates />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/employees"
+              element={
+                <ProtectedRoute>
+                  <Employees />
+                </ProtectedRoute>
+              }
+            />
+            {/* Redirects */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>

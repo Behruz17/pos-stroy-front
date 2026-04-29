@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag } from 'antd';
 import { DeleteOutlined, PlusOutlined, SearchOutlined, DollarOutlined, ShopOutlined } from '@ant-design/icons';
-import { supplierPaymentsApi, suppliersApi, type SupplierPayment, type CreateSupplierPaymentRequest, type Supplier } from '../api';
+import { supplierPaymentsApi, suppliersApi, accountsApi, type SupplierPayment, type CreateSupplierPaymentRequest, type Supplier, type Account } from '../api';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -14,6 +14,23 @@ export const SupplierPayments = () => {
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number>(1);
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+      const cashAccount = data.find(a => a.type === 'CASH' && a.status === 1);
+      if (cashAccount) {
+        setSelectedAccountId(cashAccount.id);
+      } else if (data.length > 0) {
+        setSelectedAccountId(data[0].id);
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  };
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -44,6 +61,7 @@ export const SupplierPayments = () => {
   useEffect(() => {
     fetchPayments();
     fetchSuppliers();
+    fetchAccounts();
   }, []);
 
   const handleSearch = (value: string) => {
@@ -73,6 +91,7 @@ export const SupplierPayments = () => {
       const createData: CreateSupplierPaymentRequest = {
         supplier_id: values.supplier_id,
         sum: values.sum,
+        account_id: selectedAccountId,
       };
 
       await supplierPaymentsApi.create(createData);
@@ -256,6 +275,24 @@ export const SupplierPayments = () => {
               style={{ width: '100%' }}
               prefix={<DollarOutlined />}
             />
+          </Form.Item>
+
+          <Form.Item
+            label="Счет оплаты"
+            required
+          >
+            <Select
+              value={selectedAccountId}
+              onChange={(value) => setSelectedAccountId(value)}
+              style={{ width: '100%' }}
+              placeholder="Выберите счет"
+            >
+              {accounts.filter(a => a.status === 1).map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.name} ({account.type === 'CASH' ? 'Наличные' : 'Электронный'}) - {account.current_balance.toLocaleString()}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
         </Form>
       </Modal>

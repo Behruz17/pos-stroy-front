@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,12 +7,8 @@ import { useNavigate } from 'react-router-dom';
 
 const { Title } = Typography;
 
-interface LoginFormData {
-  username: string;
-  password: string;
-}
-
 export const LoginForm = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -33,11 +30,11 @@ export const LoginForm = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number }; message?: string };
       if (axiosError.response?.status === 401) {
-        message.error('Неверный логин или пароль');
+        message.error(t('login.invalidCredentials', { defaultValue: 'Неверный логин или пароль' }));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка входа. Попробуйте позже.');
+        message.error(t('login.error', { defaultValue: 'Ошибка входа. Попробуйте позже.' }));
       }
     } finally {
       setLoading(false);
@@ -47,7 +44,7 @@ export const LoginForm = () => {
   return (
     <div className="login-container">
       <Card className="login-card" bordered={false}>
-        <Title level={3} className="login-title">Вход</Title>
+        <Title level={3} className="login-title">{t('login.title', { defaultValue: 'Вход' })}</Title>
 
         <Form
           name="login"
@@ -58,21 +55,21 @@ export const LoginForm = () => {
         >
           <Form.Item
             name="username"
-            rules={[{ required: true, message: 'Введите логин' }]}
+            rules={[{ required: true, message: t('login.enterUsername', { defaultValue: 'Введите логин' }) }]}
           >
             <Input
               prefix={<UserOutlined />}
-              placeholder="Логин"
+              placeholder={t('login.username', { defaultValue: 'Логин' })}
             />
           </Form.Item>
 
           <Form.Item
             name="password"
-            rules={[{ required: true, message: 'Введите пароль' }]}
+            rules={[{ required: true, message: t('login.enterPassword', { defaultValue: 'Введите пароль' }) }]}
           >
             <Input.Password
               prefix={<LockOutlined />}
-              placeholder="Пароль"
+              placeholder={t('login.password', { defaultValue: 'Пароль' })}
             />
           </Form.Item>
 
@@ -85,7 +82,7 @@ export const LoginForm = () => {
               size="large"
               className="login-button"
             >
-              Войти
+              {t('login.submit', { defaultValue: 'Войти' })}
             </Button>
           </Form.Item>
         </Form>
@@ -93,3 +90,8 @@ export const LoginForm = () => {
     </div>
   );
 };
+
+interface LoginFormData {
+  username: string;
+  password: string;
+}

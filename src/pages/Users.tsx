@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Tag, Tabs, Form, Input, Select, Row, Col, Modal } from 'antd';
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, UserAddOutlined, SearchOutlined } from '@ant-design/icons';
 import { usersApi, authApi, type UserWithCreated } from '../api';
@@ -15,6 +16,7 @@ interface RegisterFormData {
 }
 
 export const Users = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserWithCreated[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserWithCreated[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,9 +38,9 @@ export const Users = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 403) {
-        message.error('Доступ запрещен. Только ADMIN может просматривать пользователей.');
+        message.error(t('errors.accessDenied', { defaultValue: 'Доступ запрещен. Только ADMIN может просматривать пользователей.' }));
       } else {
-        message.error('Ошибка при загрузке пользователей');
+        message.error(t('users.errorLoading', { defaultValue: 'Ошибка при загрузке пользователей' }));
       }
     } finally {
       setLoading(false);
@@ -61,19 +63,19 @@ export const Users = () => {
 
   const handleDelete = async (id: number) => {
     if (id === currentUser?.id) {
-      message.error('Нельзя удалить самого себя');
+      message.error(t('users.cannotDeleteSelf', { defaultValue: 'Нельзя удалить самого себя' }));
       return;
     }
     try {
       await usersApi.delete(id);
-      message.success('Пользователь удален');
+      message.success(t('users.userDeleted', { defaultValue: 'Пользователь удален' }));
       fetchUsers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } } };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Нельзя удалить самого себя');
+        message.error(axiosError.response.data?.message || t('users.cannotDeleteSelf'));
       } else {
-        message.error('Ошибка при удалении пользователя');
+        message.error(t('users.errorDeleting', { defaultValue: 'Ошибка при удалении пользователя' }));
       }
     }
   };
@@ -94,7 +96,7 @@ export const Users = () => {
     setEditing(true);
     try {
       await usersApi.update(editingUser.id, values);
-      message.success('Пользователь успешно обновлен');
+      message.success(t('users.userUpdated', { defaultValue: 'Пользователь успешно обновлен' }));
       setEditModalVisible(false);
       setEditingUser(null);
       form.resetFields();
@@ -102,11 +104,11 @@ export const Users = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Ошибка при обновлении пользователя');
+        message.error(axiosError.response.data?.message || t('users.errorUpdating', { defaultValue: 'Ошибка при обновлении пользователя' }));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при обновлении пользователя');
+        message.error(t('users.errorUpdating', { defaultValue: 'Ошибка при обновлении пользователя' }));
       }
     } finally {
       setEditing(false);
@@ -122,17 +124,17 @@ export const Users = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: 'Логин',
+      title: t('users.username'),
       dataIndex: 'login',
       key: 'login',
     },
     {
-      title: 'Имя',
+      title: t('common.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: 'Роль',
+      title: t('users.role'),
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => (
@@ -140,13 +142,13 @@ export const Users = () => {
       ),
     },
     {
-      title: 'Дата создания',
+      title: t('users.createdAt'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (date: string) => new Date(date).toLocaleString(),
     },
     {
-      title: 'Действия',
+      title: t('common.actions'),
       key: 'actions',
       width: 150,
       render: (_: unknown, record: UserWithCreated) => (
@@ -156,11 +158,11 @@ export const Users = () => {
             onClick={() => handleEdit(record)}
           />
           <Popconfirm
-            title="Удалить пользователя?"
-            description="Это действие нельзя отменить"
+            title={t('users.confirmDelete')}
+            description={t('users.deleteWarning')}
             onConfirm={() => handleDelete(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
             disabled={record.id === currentUser?.id}
           >
             <Button
@@ -178,20 +180,20 @@ export const Users = () => {
     setCreating(true);
     try {
       await authApi.register(values);
-      message.success('Пользователь успешно создан');
+      message.success(t('users.userCreated', { defaultValue: 'Пользователь успешно создан' }));
       form.resetFields();
       setActiveTab('list');
       fetchUsers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 403) {
-        message.error('Только ADMIN может создавать пользователей');
+        message.error(t('errors.onlyAdmin', { defaultValue: 'Только ADMIN может создавать пользователей' }));
       } else if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Логин и пароль обязательны / Пользователь уже существует');
+        message.error(axiosError.response.data?.message || t('users.invalidData', { defaultValue: 'Логин и пароль обязательны / Пользователь уже существует' }));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при создании пользователя. Попробуйте позже.');
+        message.error(t('users.errorCreating', { defaultValue: 'Ошибка при создании пользователя. Попробуйте позже.' }));
       }
     } finally {
       setCreating(false);
@@ -204,13 +206,13 @@ export const Users = () => {
       label: (
         <span>
           <TeamOutlined />
-          Список
+          {t('users.list')}
         </span>
       ),
       children: (
         <div>
           <Input
-            placeholder="Поиск пользователей..."
+            placeholder={t('users.searchPlaceholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => handleSearch(e.target.value)}
@@ -251,35 +253,34 @@ export const Users = () => {
           >
             <Form.Item
               name="login"
-              label="Логин"
-              rules={[{ required: true, message: 'Введите логин' }]}
+              label={t('users.username')}
+              rules={[{ required: true, message: t('users.enterLogin') }]}
             >
-              <Input placeholder="Логин" />
+              <Input placeholder={t('users.username')} />
             </Form.Item>
 
             <Form.Item
               name="password"
-              label="Пароль"
-              rules={[{ required: true, message: 'Введите пароль' }, { min: 6, message: 'Минимум 6 символов' }]}
+              label={t('common.password')}
+              rules={[{ required: true, message: t('users.enterPassword') }, { min: 6, message: t('users.minPasswordLength') }]}
             >
-              <Input.Password placeholder="Пароль" />
+              <Input.Password placeholder={t('common.password')} />
             </Form.Item>
 
             <Form.Item
               name="name"
-              label="Имя"
-              rules={[{ required: true, message: 'Введите имя' }]}
+              label={t('common.name')}
+              rules={[{ required: true, message: t('users.enterName') }]}
             >
-              <Input placeholder="Имя" />
+              <Input placeholder={t('common.name')} />
             </Form.Item>
 
             <Form.Item
               name="role"
-              label="Роль"
-              rules={[{ required: true, message: 'Выберите роль' }]}
-              initialValue="USER"
+              label={t('users.role')}
+              rules={[{ required: true, message: t('users.selectRole') }]}
             >
-              <Select placeholder="Выберите роль">
+              <Select placeholder={t('users.selectRole')}>
                 <Option value="USER">USER</Option>
                 <Option value="ADMIN">ADMIN</Option>
               </Select>
@@ -294,7 +295,7 @@ export const Users = () => {
                 block
                 size="large"
               >
-                Создать пользователя
+                {t('users.createUser')}
               </Button>
             </Form.Item>
           </Form>
@@ -307,7 +308,7 @@ export const Users = () => {
 
   return (
     <div>
-      <Title level={3}>Пользователи</Title>
+      <Title level={3}>{t('users.title')}</Title>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -315,7 +316,7 @@ export const Users = () => {
       />
 
       <Modal
-        title="Редактировать пользователя"
+        title={t('users.edit')}
         open={editModalVisible}
         onCancel={() => {
           setEditModalVisible(false);
@@ -328,10 +329,10 @@ export const Users = () => {
             setEditingUser(null);
             form.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
-            Обновить
+            {t('common.update')}
           </Button>,
         ]}
         width={600}
@@ -345,30 +346,43 @@ export const Users = () => {
           size="large"
         >
           <Form.Item
-            label="Логин"
+            label={t('users.username')}
             name="login"
-            rules={[{ required: true, message: 'Введите логин' }]}
+            rules={[{ required: true, message: t('users.enterLogin') }]}
           >
-            <Input placeholder="Введите логин" />
+            <Input placeholder={t('users.enterLogin')} />
           </Form.Item>
 
           <Form.Item
-            label="Имя"
+            label={t('common.name')}
             name="name"
-            rules={[{ required: true, message: 'Введите имя' }]}
+            rules={[{ required: true, message: t('users.enterName') }]}
           >
-            <Input placeholder="Введите имя" />
+            <Input placeholder={t('users.enterName')} />
           </Form.Item>
 
-          <Form.Item
-            label="Роль"
-            name="role"
-            rules={[{ required: true, message: 'Выберите роль' }]}
-          >
-            <Select placeholder="Выберите роль">
-              <Option value="ADMIN">ADMIN</Option>
-              <Option value="SELLER">SELLER</Option>
-            </Select>
+          <Form.Item style={{ marginTop: 24 }}>
+            <Space>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={editing}
+                icon={<SaveOutlined />}
+                size="large"
+              >
+                {t('common.update')}
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditModalVisible(false);
+                  setEditingUser(null);
+                  form.resetFields();
+                }}
+                size="large"
+              >
+                {t('common.cancel')}
+              </Button>
+            </Space>
           </Form.Item>
         </Form>
       </Modal>

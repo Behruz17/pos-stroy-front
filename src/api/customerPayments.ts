@@ -13,6 +13,7 @@ export interface CustomerPayment {
 export interface CreateCustomerPaymentRequest {
   customer_id: number;
   sum: number;
+  account_id?: number;
 }
 
 export interface CreateCustomerPaymentResponse {

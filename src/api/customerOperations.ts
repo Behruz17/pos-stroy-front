@@ -6,7 +6,7 @@ export interface CustomerOperation {
   sale_id: number | null;
   customer_name: string;
   sum: number;
-  type: 'DEBT' | 'PAID' | 'PAYMENT' | 'RETURN';
+  type: 'DEBT' | 'PAID' | 'PARTIAL' | 'PAYMENT' | 'RETURN';
   date: string;
   status: number;
 }

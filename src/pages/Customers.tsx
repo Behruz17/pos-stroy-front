@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { EditOutlined, DeleteOutlined, PlusOutlined, PhoneOutlined, SearchOutlined, UserOutlined, DollarOutlined, TransactionOutlined } from '@ant-design/icons';
-import { customersApi, customerOperationsApi, salesApi, customerPaymentsApi, type Customer, type CreateCustomerRequest, type CustomerOperation, type CustomerOperationFilters, type Sale, type CustomerPayment, type CreateCustomerPaymentRequest } from '../api';
+import { customersApi, customerOperationsApi, salesApi, customerPaymentsApi, accountsApi, type Customer, type CreateCustomerRequest, type CustomerOperation, type CustomerOperationFilters, type Sale, type CustomerPayment, type CreateCustomerPaymentRequest, type Account } from '../api';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
 const { Option } = Select;
 
 export const Customers = () => {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,24 @@ export const Customers = () => {
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [paymentsForm] = Form.useForm();
   const [paymentCustomers, setPaymentCustomers] = useState<Customer[]>([]);
-  
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number>(1);
+
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+      const cashAccount = data.find(a => a.type === 'CASH' && a.status === 1);
+      if (cashAccount) {
+        setSelectedAccountId(cashAccount.id);
+      } else if (data.length > 0) {
+        setSelectedAccountId(data[0].id);
+      }
+    } catch (error) {
+      // Silently fail
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'customers' | 'operations' | 'payments'>('customers');
 
   const fetchCustomers = async () => {
@@ -49,9 +68,9 @@ export const Customers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка при загрузке клиентов');
+        message.error(t('customers.errorLoading'));
       }
     } finally {
       setLoading(false);
@@ -66,9 +85,9 @@ export const Customers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки операций клиентов');
+        message.error(t('customers.operationsErrorLoading', { defaultValue: 'Ошибка загрузки операций клиентов' }));
       }
     } finally {
       setOperationsLoading(false);
@@ -83,9 +102,9 @@ export const Customers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 401) {
-        message.error('Требуется авторизация');
+        message.error(t('errors.unauthorized'));
       } else {
-        message.error('Ошибка загрузки оплат');
+        message.error(t('customers.paymentsErrorLoading', { defaultValue: 'Ошибка загрузки оплат' }));
       }
     } finally {
       setPaymentsLoading(false);
@@ -97,7 +116,7 @@ export const Customers = () => {
       const data = await customersApi.getAll();
       setPaymentCustomers(data);
     } catch (error: unknown) {
-      message.error('Ошибка загрузки клиентов');
+      message.error(t('customers.errorLoading'));
     }
   };
 
@@ -112,6 +131,7 @@ export const Customers = () => {
 
   useEffect(() => {
     fetchCustomers();
+    fetchAccounts();
   }, []);
 
   useEffect(() => {
@@ -126,14 +146,14 @@ export const Customers = () => {
   const handleDelete = async (id: number) => {
     try {
       await customersApi.delete(id);
-      message.success('Клиент удален');
+      message.success(t('customers.customerDeleted'));
       fetchCustomers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number } };
       if (axiosError.response?.status === 404) {
-        message.error('Клиент не найден');
+        message.error(t('errors.notFound'));
       } else {
-        message.error('Ошибка при удалении клиента');
+        message.error(t('customers.errorDeleting'));
       }
     }
   };
@@ -142,18 +162,18 @@ export const Customers = () => {
     setCreating(true);
     try {
       await customersApi.create(values);
-      message.success('Клиент успешно создан');
+      message.success(t('customers.customerCreated'));
       setModalVisible(false);
       form.resetFields();
       fetchCustomers();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Проверьте обязательные поля');
+        message.error(axiosError.response.data?.message || t('errors.required'));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при создании клиента');
+        message.error(t('customers.errorCreating'));
       }
     } finally {
       setCreating(false);
@@ -180,7 +200,7 @@ export const Customers = () => {
     setEditing(true);
     try {
       await customersApi.update(editingCustomer.id, values);
-      message.success('Клиент успешно обновлен');
+      message.success(t('customers.customerUpdated'));
       setEditModalVisible(false);
       setEditingCustomer(null);
       form.resetFields();
@@ -188,11 +208,11 @@ export const Customers = () => {
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } }; message?: string };
       if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Ошибка при обновлении клиента');
+        message.error(axiosError.response.data?.message || t('customers.errorUpdating'));
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка при обновлении клиента');
+        message.error(t('customers.errorUpdating'));
       }
     } finally {
       setEditing(false);
@@ -219,14 +239,14 @@ export const Customers = () => {
   const handleOperationRowClick = async (record: CustomerOperation) => {
     setSelectedOperation(record);
     
-    // If it's a DEBT or PAID operation with sale_id, fetch the sale details with items
-    if ((record.type === 'DEBT' || record.type === 'PAID') && record.sale_id) {
+    // If it's a DEBT, PAID, or PARTIAL operation with sale_id, fetch the sale details with items
+    if ((record.type === 'DEBT' || record.type === 'PAID' || record.type === 'PARTIAL') && record.sale_id) {
       setLoadingSale(true);
       try {
         const saleData = await salesApi.getById(record.sale_id);
         setSaleDetails(saleData);
       } catch (error: unknown) {
-        message.error('Ошибка при загрузке деталей продажи');
+        message.error(t('sales.errorLoadingDetails', { defaultValue: 'Ошибка при загрузке деталей продажи' }));
         setSaleDetails(null);
       } finally {
         setLoadingSale(false);
@@ -248,7 +268,8 @@ export const Customers = () => {
     switch (type) {
       case 'DEBT': return 'red';
       case 'PAID': return 'green';
-      case 'PAYMENT': return 'blue';
+      case 'PARTIAL': return 'blue';
+      case 'PAYMENT': return 'cyan';
       case 'RETURN': return 'orange';
       default: return 'default';
     }
@@ -258,6 +279,7 @@ export const Customers = () => {
     switch (type) {
       case 'DEBT': return 'Долг';
       case 'PAID': return 'Оплачено';
+      case 'PARTIAL': return 'Частично';
       case 'PAYMENT': return 'Платёж';
       case 'RETURN': return 'Возврат';
       default: return type;
@@ -272,16 +294,16 @@ export const Customers = () => {
   const handleDeletePayment = async (id: number) => {
     try {
       await customerPaymentsApi.delete(id);
-      message.success('Оплата успешно удалена');
+      message.success(t('payments.paymentDeleted', { defaultValue: 'Оплата успешно удалена' }));
       fetchPayments();
     } catch (error: unknown) {
       const axiosError = error as { response?: { status: number; data?: { message?: string } } };
       if (axiosError.response?.status === 404) {
-        message.error(axiosError.response.data?.message || 'Оплата не найдена');
+        message.error(axiosError.response.data?.message || t('payments.paymentNotFound', { defaultValue: 'Оплата не найдена' }));
       } else if (axiosError.response?.status === 400) {
-        message.error(axiosError.response.data?.message || 'Нельзя удалить эту оплату');
+        message.error(axiosError.response.data?.message || t('payments.cannotDelete', { defaultValue: 'Нельзя удалить эту оплату' }));
       } else {
-        message.error('Ошибка удаления оплаты');
+        message.error(t('payments.errorDeleting', { defaultValue: 'Ошибка удаления оплаты' }));
       }
     }
   };
@@ -292,10 +314,11 @@ export const Customers = () => {
       const createData: CreateCustomerPaymentRequest = {
         customer_id: values.customer_id,
         sum: values.sum,
+        account_id: selectedAccountId,
       };
 
       await customerPaymentsApi.create(createData);
-      message.success('Оплата успешно создана');
+      message.success(t('payments.paymentCreated', { defaultValue: 'Оплата успешно создана' }));
       setPaymentsModalVisible(false);
       paymentsForm.resetFields();
       fetchPayments();
@@ -306,9 +329,9 @@ export const Customers = () => {
         const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Проверьте обязательные поля';
         message.error(errorMessage);
       } else if (axiosError.message?.includes('Network Error')) {
-        message.error('Сервер недоступен. Проверьте подключение.');
+        message.error(t('errors.networkError'));
       } else {
-        message.error('Ошибка создания оплаты');
+        message.error(t('payments.errorCreating', { defaultValue: 'Ошибка создания оплаты' }));
       }
     } finally {
       setCreatingPayment(false);
@@ -328,19 +351,19 @@ export const Customers = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: 'Полное имя',
+      title: t('customers.fullName'),
       dataIndex: 'full_name',
       key: 'full_name',
       ellipsis: true,
     },
     {
-      title: 'Телефон',
+      title: t('common.phone'),
       dataIndex: 'phone',
       key: 'phone',
       render: (phone: string) => phone || '-',
     },
     {
-      title: 'Баланс',
+      title: t('customers.balance'),
       dataIndex: 'balance',
       key: 'balance',
       render: (balance: number) => (
@@ -351,7 +374,7 @@ export const Customers = () => {
       ),
     },
     {
-      title: 'Действия',
+      title: t('common.actions'),
       key: 'actions',
       width: 120,
       render: (_: unknown, record: Customer) => (
@@ -362,11 +385,11 @@ export const Customers = () => {
             size="small"
           />
           <Popconfirm
-            title="Удалить клиента?"
-            description="Это действие нельзя отменить"
+            title={t('customers.confirmDeleteTitle', { defaultValue: 'Удалить клиента?' })}
+            description={t('customers.confirmDeleteDesc', { defaultValue: 'Это действие нельзя отменить' })}
             onConfirm={() => handleDelete(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
             <Button danger icon={<DeleteOutlined />} size="small" />
           </Popconfirm>
@@ -383,19 +406,19 @@ export const Customers = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: 'Дата',
+      title: t('common.date'),
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => dayjs(date).format('DD.MM.YYYY HH:mm'),
     },
     {
-      title: 'Клиент',
+      title: t('customers.customer'),
       dataIndex: 'customer_name',
       key: 'customer_name',
       ellipsis: true,
     },
     {
-      title: 'Тип',
+      title: t('common.type'),
       dataIndex: 'type',
       key: 'type',
       render: (type: string) => (
@@ -405,7 +428,7 @@ export const Customers = () => {
       ),
     },
     {
-      title: 'Сумма',
+      title: t('common.amount'),
       dataIndex: 'sum',
       key: 'sum',
       render: (sum: number, record: CustomerOperation) => (
@@ -424,19 +447,19 @@ export const Customers = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: 'Дата',
+      title: t('common.date'),
       dataIndex: 'date',
       key: 'date',
       render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
-      title: 'Клиент',
+      title: t('customers.customer'),
       dataIndex: 'customer_name',
       key: 'customer_name',
       ellipsis: true,
     },
     {
-      title: 'Сумма',
+      title: t('common.amount'),
       dataIndex: 'sum',
       key: 'sum',
       render: (amount: number) => (
@@ -447,28 +470,19 @@ export const Customers = () => {
       ),
     },
     {
-      title: 'Тип',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => (
-        <Tag color="blue">{type}</Tag>
-      ),
-      width: 100,
-    },
-    {
-      title: 'Действия',
+      title: t('common.actions'),
       key: 'actions',
       width: 120,
       render: (_: unknown, record: CustomerPayment) => (
         <Space size="small">
           <Popconfirm
-            title="Удалить оплату?"
-            description="Это действие нельзя отменить, баланс клиента будет восстановлен"
+            title={t('customers.deletePaymentTitle', { defaultValue: 'Удалить оплату?' })}
+            description={t('customers.deletePaymentDesc', { defaultValue: 'Это действие нельзя отменить, баланс клиента будет восстановлен' })}
             onConfirm={() => handleDeletePayment(record.id)}
-            okText="Да"
-            cancelText="Нет"
+            okText={t('common.yes')}
+            cancelText={t('common.no')}
           >
-            <Button danger icon={<DeleteOutlined />} size="small" title="Удалить" />
+            <Button danger icon={<DeleteOutlined />} size="small" title={t('common.delete')} />
           </Popconfirm>
         </Space>
       ),
@@ -582,6 +596,7 @@ export const Customers = () => {
                 >
                   <Option value="DEBT">Долг</Option>
                   <Option value="PAID">Оплачено</Option>
+                  <Option value="PARTIAL">Частично</Option>
                   <Option value="PAYMENT">Платёж</Option>
                   <Option value="RETURN">Возврат</Option>
                 </Select>
@@ -750,8 +765,32 @@ export const Customers = () => {
         ]}
         width={600}
       >
-        {selectedOperation && (selectedOperation.type === 'DEBT' || selectedOperation.type === 'PAID') ? (
+        {selectedOperation && (selectedOperation.type === 'DEBT' || selectedOperation.type === 'PAID' || selectedOperation.type === 'PARTIAL') ? (
           <div>
+            {selectedOperation?.type === 'PARTIAL' && saleDetails && (saleDetails.cash_amount > 0 || saleDetails.electronic_amount > 0) && (
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col span={12}>
+                  <Card size="small">
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#8c8c8c', fontSize: 14 }}>Оплачено</div>
+                      <div style={{ color: '#52c41a', fontSize: 24, fontWeight: 'bold' }}>
+                        {(Number(saleDetails.cash_amount) + Number(saleDetails.electronic_amount)).toFixed(2)} TJS
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+                <Col span={12}>
+                  <Card size="small">
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#8c8c8c', fontSize: 14 }}>Осталось</div>
+                      <div style={{ color: '#ff4d4f', fontSize: 24, fontWeight: 'bold' }}>
+                        {(Number(saleDetails.total_amount) - Number(saleDetails.cash_amount) - Number(saleDetails.electronic_amount)).toFixed(2)} TJS
+                      </div>
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+            )}
             {loadingSale ? (
               <div style={{ textAlign: 'center', padding: 20 }}>
                 <Spin size="large" />
@@ -765,26 +804,26 @@ export const Customers = () => {
                 scroll={{ x: 'max-content', y: 400 }}
                 columns={[
                   {
-                    title: 'Товар',
+                    title: t('common.product'),
                     dataIndex: 'product_name',
                     key: 'product_name',
                     ellipsis: true,
                   },
                   {
-                    title: 'Код',
-                    dataIndex: 'product_code',
-                    key: 'product_code',
-                    width: 100,
+                    title: t('common.id'),
+                    dataIndex: 'product_id',
+                    key: 'product_id',
+                    width: 80,
                   },
                   {
-                    title: 'Кол-во',
+                    title: t('common.quantityShort', { defaultValue: 'Кол-во' }),
                     dataIndex: 'quantity',
                     key: 'quantity',
                     width: 80,
                     align: 'right',
                   },
                   {
-                    title: 'Цена',
+                    title: t('common.price'),
                     dataIndex: 'unit_price',
                     key: 'unit_price',
                     width: 100,
@@ -792,7 +831,7 @@ export const Customers = () => {
                     render: (price: number) => price.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' }),
                   },
                   {
-                    title: 'Сумма',
+                    title: t('common.amount'),
                     dataIndex: 'total_price',
                     key: 'total_price',
                     width: 100,
@@ -803,19 +842,19 @@ export const Customers = () => {
               />
             ) : (
               <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-                Нет данных о товарах
+                {t('customers.noProductData', { defaultValue: 'Нет данных о товарах' })}
               </div>
             )}
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-            Для этой операции нет данных о товарах
+            {t('customers.noProductDataForOperation', { defaultValue: 'Для этой операции нет данных о товарах' })}
           </div>
         )}
       </Modal>
 
       <Modal
-        title="Добавить оплату клиента"
+        title={t('customers.addPayment')}
         open={paymentsModalVisible}
         onCancel={() => {
           setPaymentsModalVisible(false);
@@ -826,10 +865,10 @@ export const Customers = () => {
             setPaymentsModalVisible(false);
             paymentsForm.resetFields();
           }}>
-            Отмена
+            {t('common.cancel')}
           </Button>,
           <Button key="submit" type="primary" onClick={() => paymentsForm.submit()} loading={creatingPayment}>
-            Создать
+            {t('common.create')}
           </Button>,
         ]}
         width={600}
@@ -840,11 +879,11 @@ export const Customers = () => {
           onFinish={handleCreatePayment}
         >
           <Form.Item
-            label="Клиент"
+            label={t('common.customer')}
             name="customer_id"
-            rules={[{ required: true, message: 'Выберите клиента' }]}
+            rules={[{ required: true, message: t('customers.selectCustomer', { defaultValue: 'Выберите клиента' }) }]}
           >
-            <Select placeholder="Выберите клиента" prefix={<UserOutlined />}>
+            <Select placeholder={t('customers.selectCustomer', { defaultValue: 'Выберите клиента' })} prefix={<UserOutlined />}>
               {paymentCustomers.map(customer => (
                 <Option key={customer.id} value={customer.id}>
                   {customer.full_name}
@@ -854,21 +893,43 @@ export const Customers = () => {
           </Form.Item>
 
           <Form.Item
-            label="Сумма"
+            label={t('common.amount')}
             name="sum"
             rules={[
-              { required: true, message: 'Введите сумму' },
-              { type: 'number', min: 0.01, message: 'Сумма должна быть больше 0' }
+              { required: true, message: t('customers.enterAmount', { defaultValue: 'Введите сумму' }) },
+              { type: 'number', min: 0.01, message: t('customers.amountGreaterThanZero', { defaultValue: 'Сумма должна быть больше 0' }) }
             ]}
           >
             <InputNumber
-              placeholder="Сумма"
+              placeholder={t('common.amount')}
               min={0.01}
               step={0.01}
               precision={2}
               style={{ width: '100%' }}
               prefix={<DollarOutlined />}
             />
+          </Form.Item>
+
+          <Form.Item
+            label={t('customers.account', { defaultValue: 'Счет оплаты' })}
+            required
+          >
+            {accounts.length === 0 ? (
+              <div style={{ color: '#ff4d4f' }}>Счета не загружены. Проверьте подключение к API.</div>
+            ) : (
+              <Select
+                value={selectedAccountId}
+                onChange={(value) => setSelectedAccountId(value)}
+                style={{ width: '100%' }}
+                placeholder="Выберите счет"
+              >
+                {accounts.filter(a => a.status === 1).map(account => (
+                  <Option key={account.id} value={account.id}>
+                    {account.name} ({account.type === 'CASH' ? 'Наличные' : 'Электронный'}) - {account.current_balance.toLocaleString()}
+                  </Option>
+                ))}
+              </Select>
+            )}
           </Form.Item>
         </Form>
       </Modal>

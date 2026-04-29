@@ -7,6 +7,30 @@
   display: block;
 }
 
+.sidebar-menu-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: calc(100vh - 64px - 80px); /* header + footer padding */
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar-menu-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
 @media (max-width: 768px) {
   .mobile-header {
     display: flex !important;

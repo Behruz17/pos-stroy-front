@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Layout as AntLayout, Menu, Button, Typography, Divider, Drawer } from 'antd'
 import { useAuth } from '../contexts/AuthContext'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { UserOutlined, DashboardOutlined, LogoutOutlined, TeamOutlined, ShopOutlined, MenuOutlined, ShoppingOutlined, UserAddOutlined, ShoppingCartOutlined, DollarOutlined, RotateLeftOutlined, CreditCardOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import { UserOutlined, DashboardOutlined, LogoutOutlined, TeamOutlined, ShopOutlined, MenuOutlined, ShoppingOutlined, UserAddOutlined, ShoppingCartOutlined, DollarOutlined, RotateLeftOutlined, CreditCardOutlined, WalletOutlined, PieChartOutlined, CarryOutOutlined, SwapOutlined } from '@ant-design/icons'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import './Layout.css'
 
 const { Content, Header, Sider } = AntLayout
@@ -17,6 +19,7 @@ export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { t } = useTranslation()
 
   const handleLogout = async () => {
     await logout()
@@ -28,59 +31,94 @@ export const Layout = ({ children }: LayoutProps) => {
         {
           key: '/',
           icon: <DashboardOutlined />,
-          label: <Link to="/">Главная</Link>,
+          label: <Link to="/">{t('navigation.dashboard', { defaultValue: 'Главная' })}</Link>,
         },
         {
           key: '/suppliers',
           icon: <ShopOutlined />,
-          label: <Link to="/suppliers">Поставщики</Link>,
+          label: <Link to="/suppliers">{t('navigation.suppliers')}</Link>,
         },
         {
           key: '/products',
           icon: <ShoppingOutlined />,
-          label: <Link to="/products">Товары</Link>,
+          label: <Link to="/products">{t('navigation.products')}</Link>,
         },
         {
           key: '/customers',
           icon: <UserAddOutlined />,
-          label: <Link to="/customers">Клиенты</Link>,
+          label: <Link to="/customers">{t('navigation.customers')}</Link>,
         },
         {
           key: '/stock-receipts',
           icon: <ShoppingCartOutlined />,
-          label: <Link to="/stock-receipts">Приходы</Link>,
+          label: <Link to="/stock-receipts">{t('navigation.stockReceipts')}</Link>,
         },
         {
           key: '/sales',
           icon: <DollarOutlined />,
-          label: <Link to="/sales">Продажи</Link>,
+          label: <Link to="/sales">{t('navigation.sales')}</Link>,
         },
         {
           key: '/returns',
           icon: <RotateLeftOutlined />,
-          label: <Link to="/returns">Возвраты</Link>,
+          label: <Link to="/returns">{t('navigation.returns')}</Link>,
+        },
+        {
+          key: '/conversions',
+          icon: <SwapOutlined />,
+          label: <Link to="/conversions">{t('navigation.conversions', { defaultValue: 'Переработка' })}</Link>,
         },
         {
           key: '/expenses',
           icon: <CreditCardOutlined />,
-          label: <Link to="/expenses">Расходы</Link>,
+          label: <Link to="/expenses">{t('navigation.expenses')}</Link>,
         },
         {
-          key: '/debtors',
-          icon: <ExclamationCircleOutlined />,
-          label: <Link to="/debtors">Должники</Link>,
+          key: '/salaries',
+          icon: <WalletOutlined />,
+          label: <Link to="/salaries">{t('navigation.salaries')}</Link>,
         },
+        {
+          key: '/accounts',
+          icon: <WalletOutlined />,
+          label: <Link to="/accounts">{t('navigation.accounts', { defaultValue: 'Счета' })}</Link>,
+        },
+        {
+          key: '/employees',
+          icon: <TeamOutlined />,
+          label: <Link to="/employees">{t('navigation.employees', { defaultValue: 'Сотрудники' })}</Link>,
+        },
+        {
+          key: '/exchange-rates',
+          icon: <DollarOutlined />,
+          label: <Link to="/exchange-rates">{t('navigation.exchangeRates', { defaultValue: 'Курсы валют' })}</Link>,
+        },
+        {
+          key: '/reports',
+          icon: <PieChartOutlined />,
+          label: <Link to="/reports">{t('navigation.reports', { defaultValue: 'Отчеты' })}</Link>,
+        },
+        {
+          key: '/daily-summary',
+          icon: <CarryOutOutlined />,
+          label: <Link to="/daily-summary">{t('navigation.dailySummary', { defaultValue: 'Итог дня' })}</Link>,
+        },
+        // {
+        //   key: '/debtors',
+        //   icon: <ExclamationCircleOutlined />,
+        //   label: <Link to="/debtors">{t('navigation.debtors')}</Link>,
+        // },
                 ...(hasRole('ADMIN') ? [{
           key: '/users',
           icon: <TeamOutlined />,
-          label: <Link to="/users">Пользователи</Link>,
+          label: <Link to="/users">{t('navigation.users')}</Link>,
         }] : []),
       ]
     : [
         {
           key: '/login',
           icon: <UserOutlined />,
-          label: <Link to="/login">Вход</Link>,
+          label: <Link to="/login">{t('common.login')}</Link>,
         },
       ]
 
@@ -100,21 +138,25 @@ export const Layout = ({ children }: LayoutProps) => {
               top: 0,
               bottom: 0,
               zIndex: 1000,
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
-            <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>
                 ERM App
               </Text>
             </div>
-            <Menu
-              theme="dark"
-              mode="inline"
-              selectedKeys={[location.pathname]}
-              items={menuItems}
-            />
+            <div className="sidebar-menu-scroll">
+              <Menu
+                theme="dark"
+                mode="inline"
+                selectedKeys={[location.pathname]}
+                items={menuItems}
+              />
+            </div>
             {user && (
-              <>
+              <div style={{ flexShrink: 0 }}>
                 <Divider style={{ background: 'rgba(255,255,255,0.1)', margin: '16px 0' }} />
                 <div style={{ padding: '0 16px' }}>
                   <Button
@@ -124,10 +166,10 @@ export const Layout = ({ children }: LayoutProps) => {
                     onClick={handleLogout}
                     block
                   >
-                    <span>Выйти</span>
+                    <span>{t('common.logout')}</span>
                   </Button>
                 </div>
-              </>
+              </div>
             )}
           </Sider>
 
@@ -168,7 +210,7 @@ export const Layout = ({ children }: LayoutProps) => {
                     block
                     style={{ marginTop: 8 }}
                   >
-                    Выйти
+                    {t('common.logout')}
                   </Button>
                 </div>
               </>
@@ -194,7 +236,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 style={{ fontSize: 18 }}
               />
               <Text strong style={{ fontSize: 16 }}>ERM App</Text>
-              <div style={{ width: 32 }} />
+              <LanguageSwitcher />
             </Header>
             <Content style={{ padding: '16px 12px', minHeight: 'calc(100vh - 64px)' }}>{children}</Content>
           </AntLayout>

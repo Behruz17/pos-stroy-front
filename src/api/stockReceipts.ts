@@ -9,6 +9,8 @@ export interface StockReceiptItem {
   quantity: number;
   purchase_cost: number;
   selling_price: number;
+  purchase_cost_converted?: number | null;
+  batch_code?: string | null;
 }
 
 export interface StockReceipt {
@@ -18,6 +20,9 @@ export interface StockReceipt {
   total_amount: number;
   supplier_id: number;
   supplier_name: string;
+  currency: string;
+  rate: string;
+  total_amount_converted?: number | null;
   items?: StockReceiptItem[];
 }
 
@@ -26,10 +31,13 @@ export interface CreateStockReceiptItem {
   quantity: number;
   purchase_cost: number;
   selling_price: number;
+  batch_code?: string;
 }
 
 export interface CreateStockReceiptRequest {
   supplier_id: number;
+  currency?: string;
+  rate?: number;
   items: CreateStockReceiptItem[];
 }
 
