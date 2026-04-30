@@ -12,8 +12,7 @@ export const Expenses = () => {
   const { t } = useTranslation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState(false);
+    const [editing, setEditing] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -97,34 +96,23 @@ export const Expenses = () => {
   };
 
   const handleCreate = async (values: any) => {
-    setCreating(true);
     try {
       const createData: CreateExpenseRequest = {
         description: values.description,
         amount: values.amount,
-        expense_date: dayjs().format('YYYY-MM-DD'),
         recipient_id: values.recipient_id,
         account_id: selectedAccountId,
+        expense_date: values.date ? values.date.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
       };
 
       await expensesApi.create(createData);
-      message.success(t('expenses.expenseCreated', { defaultValue: 'Расход успешно создан' }));
+      message.success(t('expenses.expenseCreated', { defaultValue: 'Расход создан' }));
       setCreateModalVisible(false);
       createForm.resetFields();
       fetchExpenses();
     } catch (error: unknown) {
-      const axiosError = error as { response?: { status: number; data?: { message?: string; error?: string } }; message?: string };
-      
-      if (axiosError.response?.status === 400) {
-        const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Check required fields';
-        message.error(errorMessage);
-      } else if (axiosError.message?.includes('Network Error')) {
-        message.error(t('errors.networkError'));
-      } else {
-        message.error(t('expenses.errorCreating', { defaultValue: 'Ошибка создания расхода' }));
-      }
-    } finally {
-      setCreating(false);
+      console.error('Error creating expense:', error);
+      message.error(t('expenses.errorCreating', { defaultValue: 'Ошибка создания расхода' }));
     }
   };
 

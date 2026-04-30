@@ -49,6 +49,11 @@ export const Layout = ({ children }: LayoutProps) => {
           label: <Link to="/customers">{t('navigation.customers')}</Link>,
         },
         {
+          key: '/debtors',
+          icon: <TeamOutlined />,
+          label: <Link to="/debtors">{t('navigation.debtors', { defaultValue: 'Должники' })}</Link>,
+        },
+        {
           key: '/stock-receipts',
           icon: <ShoppingCartOutlined />,
           label: <Link to="/stock-receipts">{t('navigation.stockReceipts')}</Link>,

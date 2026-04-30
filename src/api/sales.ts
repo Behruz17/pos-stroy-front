@@ -21,9 +21,9 @@ export interface Sale {
   id: number;
   customer_id: number;
   customer_name: string;
-  total_amount: number;
-  cash_amount: number;
-  electronic_amount: number;
+  total_amount: string;
+  cash_amount: string;
+  electronic_amount: string;
   payment_status: 'PAID' | 'DEBT' | 'PARTIAL';
   stage: SaleStage;
   debt_deadline?: string;

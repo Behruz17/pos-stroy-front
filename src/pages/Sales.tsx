@@ -180,12 +180,14 @@ export const Sales = () => {
     setLoadingSaleDetails(true);
     try {
       const detailedSale = await salesApi.getById(id);
+      console.log('Server response for sale details:', detailedSale);
       setSelectedSale(detailedSale);
       // Also update selectedReceiptSale if it's the same sale
       if (selectedReceiptSale && selectedReceiptSale.id === id) {
         setSelectedReceiptSale(detailedSale);
       }
     } catch (error: unknown) {
+      console.error('Error loading sale details:', error);
       message.error(t('sales.errorLoadingDetails', { defaultValue: 'Error loading sale details' }));
     } finally {
       setLoadingSaleDetails(false);
@@ -507,8 +509,13 @@ export const Sales = () => {
 
   // Handler to open payment modal
   const handleOpenPaymentModal = (sale: Sale) => {
+    console.log('Sale data for payment modal:', sale);
     setSelectedSaleForPayment(sale);
-    const remaining = sale.total_amount - (sale.cash_amount + sale.electronic_amount);
+    const totalAmount = parseFloat(sale.total_amount) || 0;
+    const cashAmount = parseFloat(sale.cash_amount) || 0;
+    const electronicAmount = parseFloat(sale.electronic_amount) || 0;
+    const remaining = totalAmount - (cashAmount + electronicAmount);
+    console.log('Payment calculation:', { totalAmount, cashAmount, electronicAmount, remaining });
     setPaymentAmount(remaining > 0 ? remaining : 0);
     setPaymentModalVisible(true);
   };
@@ -1565,7 +1572,7 @@ export const Sales = () => {
               </Col>
               <Col span={6}>
                 <Tag color="orange" icon={<DollarOutlined />}>
-                  {t('common.total')}: {selectedSale.total_amount.toLocaleString()}
+                  {t('common.total')}: {(parseFloat(selectedSale.total_amount) || 0).toLocaleString()}
                 </Tag>
               </Col>
               <Col span={6}>
@@ -1575,13 +1582,13 @@ export const Sales = () => {
               </Col>
             </Row>
             
-            {selectedSale.payment_status === 'PARTIAL' && (selectedSale.cash_amount > 0 || selectedSale.electronic_amount > 0) && (
+            {selectedSale.payment_status === 'PARTIAL' && ((parseFloat(selectedSale.cash_amount) || 0) > 0 || (parseFloat(selectedSale.electronic_amount) || 0) > 0) && (
               <Row gutter={16} style={{ marginBottom: 16 }}>
                 <Col span={8}>
                   <Card size="small">
                     <Statistic
                       title={t('sales.cashAmount', { defaultValue: 'Наличные' })}
-                      value={selectedSale.cash_amount}
+                      value={parseFloat(selectedSale.cash_amount) || 0}
                       precision={2}
                       valueStyle={{ color: '#52c41a' }}
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
@@ -1592,7 +1599,7 @@ export const Sales = () => {
                   <Card size="small">
                     <Statistic
                       title={t('sales.electronicAmount', { defaultValue: 'Электронные' })}
-                      value={selectedSale.electronic_amount}
+                      value={parseFloat(selectedSale.electronic_amount) || 0}
                       precision={2}
                       valueStyle={{ color: '#1890ff' }}
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
@@ -1603,7 +1610,7 @@ export const Sales = () => {
                   <Card size="small">
                     <Statistic
                       title={t('sales.remainingAmount', { defaultValue: 'Осталось к оплате' })}
-                      value={selectedSale.total_amount - (selectedSale.cash_amount + selectedSale.electronic_amount)}
+                      value={(parseFloat(selectedSale.total_amount) || 0) - ((parseFloat(selectedSale.cash_amount) || 0) + (parseFloat(selectedSale.electronic_amount) || 0))}
                       precision={2}
                       valueStyle={{ color: '#ff4d4f' }}
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
@@ -2159,10 +2166,10 @@ export const Sales = () => {
             <div style={{ marginBottom: 16 }}>
               <Text strong>{t('sales.saleInfo', { defaultValue: 'Информация о продаже' })}:</Text>
               <div style={{ marginTop: 8 }}>
-                <div>{t('common.totalAmount', { defaultValue: 'Общая сумма' })}: <Text strong>{selectedSaleForPayment.total_amount.toLocaleString()} TJS</Text></div>
-                <div>{t('sales.cashAmount', { defaultValue: 'Наличные' })}: <Text style={{ color: '#52c41a' }}>{selectedSaleForPayment.cash_amount.toLocaleString()} TJS</Text></div>
-                <div>{t('sales.electronicAmount', { defaultValue: 'Электронные' })}: <Text style={{ color: '#1890ff' }}>{selectedSaleForPayment.electronic_amount.toLocaleString()} TJS</Text></div>
-                <div>{t('sales.remainingAmount', { defaultValue: 'Осталось' })}: <Text style={{ color: '#ff4d4f' }}>{(selectedSaleForPayment.total_amount - (selectedSaleForPayment.cash_amount + selectedSaleForPayment.electronic_amount)).toLocaleString()} TJS</Text></div>
+                <div>{t('common.totalAmount', { defaultValue: 'Общая сумма' })}: <Text strong>{(parseFloat(selectedSaleForPayment.total_amount) || 0).toLocaleString()} TJS</Text></div>
+                <div>{t('sales.cashAmount', { defaultValue: 'Наличные' })}: <Text style={{ color: '#52c41a' }}>{(parseFloat(selectedSaleForPayment.cash_amount) || 0).toLocaleString()} TJS</Text></div>
+                <div>{t('sales.electronicAmount', { defaultValue: 'Электронные' })}: <Text style={{ color: '#1890ff' }}>{(parseFloat(selectedSaleForPayment.electronic_amount) || 0).toLocaleString()} TJS</Text></div>
+                <div>{t('sales.remainingAmount', { defaultValue: 'Осталось' })}: <Text style={{ color: '#ff4d4f' }}>{((parseFloat(selectedSaleForPayment.total_amount) || 0) - ((parseFloat(selectedSaleForPayment.cash_amount) || 0) + (parseFloat(selectedSaleForPayment.electronic_amount) || 0))).toLocaleString()} TJS</Text></div>
               </div>
             </div>
             
@@ -2173,7 +2180,7 @@ export const Sales = () => {
               <InputNumber
                 style={{ width: '100%' }}
                 min={0.01}
-                max={selectedSaleForPayment.total_amount - (selectedSaleForPayment.cash_amount + selectedSaleForPayment.electronic_amount)}
+                max={(parseFloat(selectedSaleForPayment.total_amount) || 0) - ((parseFloat(selectedSaleForPayment.cash_amount) || 0) + (parseFloat(selectedSaleForPayment.electronic_amount) || 0))}
                 precision={2}
                 value={paymentAmount}
                 onChange={(value) => setPaymentAmount(value || 0)}

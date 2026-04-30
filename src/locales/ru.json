@@ -508,8 +508,21 @@
     "detailTitle": "Детали должника",
     "confirmDeleteOperation": "Вы уверены, что хотите удалить эту операцию?",
     "deleteWarning": "Это действие нельзя отменить",
-    "yes": "Да",
-    "no": "Нет"
+    "fullName": "ФИО",
+    "debtor": "Должник",
+    "addDebtor": "Добавить должника",
+    "operationsErrorLoading": "Ошибка загрузки операций должников",
+    "errorSaving": "Ошибка при сохранении должника",
+    "errorDeletingOperation": "Ошибка при удалении операции",
+    "errorSavingOperation": "Ошибка при сохранении операции",
+    "borrowOperationCreated": "Операция займа успешно создана",
+    "returnOperationCreated": "Операция возврата успешно создана",
+    "createBorrowOperation": "Создать операцию займа",
+    "createReturnOperation": "Создать операцию возврата",
+    "borrowed": "Заём",
+    "returned": "Возврат",
+    "operationDeleted": "Операция успешно удалена",
+    "searchOperationsPlaceholder": "Поиск по ФИО или описанию"
   },
   "users": {
     "title": "Пользователи",

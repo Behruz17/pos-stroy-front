@@ -27,7 +27,6 @@ export const Products = () => {
   const [newPrice, setNewPrice] = useState<number | undefined>(undefined);
   const [adjustingStock, setAdjustingStock] = useState(false);
   const [productStockItems, setProductStockItems] = useState<Record<number, StockItem[]>>({});
-  const [loadingStockItems, setLoadingStockItems] = useState<Record<number, boolean>>({});
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -82,14 +81,11 @@ export const Products = () => {
 
   const fetchProductStockItems = async (productId: number) => {
     if (productStockItems[productId]) return; // already cached
-    setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
     try {
       const response = await stockItemsApi.getByProductId(productId);
       setProductStockItems(prev => ({ ...prev, [productId]: response.batches || [] }));
     } catch (error) {
       console.error(`Failed to load stock items for product ${productId}:`, error);
-    } finally {
-      setLoadingStockItems(prev => ({ ...prev, [productId]: false }));
     }
   };
 
@@ -353,7 +349,7 @@ export const Products = () => {
       key: 'selling_price',
       width: 120,
       align: 'right',
-      render: (price: number | null, record: Product) => {
+      render: (_: number | null, record: Product) => {
         const productPrice = getProductPrice(record);
         return productPrice ? productPrice.toLocaleString() : '-';
       },

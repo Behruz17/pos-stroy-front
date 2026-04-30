@@ -13,9 +13,9 @@ export interface Debtor {
 
 export interface CreateDebtorRequest {
   full_name: string;
-  phone: string;
-  debt_amount: number;
-  description: string;
+  phone?: string;
+  initial_debt?: number;
+  description?: string;
 }
 
 export interface UpdateDebtorRequest {

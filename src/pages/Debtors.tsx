@@ -146,7 +146,6 @@ export const Debtors = () => {
     form.setFieldsValue({
       full_name: debtor.full_name,
       phone: debtor.phone,
-      debt_amount: debtor.debt_amount,
       description: debtor.description,
     });
   };
@@ -164,20 +163,26 @@ export const Debtors = () => {
   const handleSubmit = async (values: any) => {
     try {
       if (editingDebtor) {
-        // Exclude debt_amount if it's 0 to avoid server validation error
         const updateData: UpdateDebtorRequest = {
           full_name: values.full_name,
           phone: values.phone,
           description: values.description,
         };
-        if (values.debt_amount && values.debt_amount > 0) {
-          updateData.debt_amount = values.debt_amount;
-        }
         await debtorsApi.update(editingDebtor.id, updateData);
         message.success(t('debtors.debtorUpdated', { defaultValue: 'Должник успешно обновлен' }));
       } else {
-        await debtorsApi.create(values as CreateDebtorRequest);
-        message.success(t('debtors.debtorCreated', { defaultValue: 'Должник успешно создан' }));
+        const createData: CreateDebtorRequest = {
+          full_name: values.full_name,
+          phone: values.phone,
+          ...(values.debt_amount && values.debt_amount > 0 && { initial_debt: values.debt_amount }),
+          description: values.description,
+        };
+        await debtorsApi.create(createData);
+        if (values.debt_amount && values.debt_amount > 0) {
+          message.success(t('debtors.debtorCreatedWithDebt', { defaultValue: 'Должник с начальным долгом успешно создан' }));
+        } else {
+          message.success(t('debtors.debtorCreated', { defaultValue: 'Должник успешно создан' }));
+        }
       }
       setModalVisible(false);
       form.resetFields();
@@ -404,8 +409,9 @@ export const Debtors = () => {
           <Table
             columns={debtorColumns}
             dataSource={debtors.filter(debtor => 
-              debtor.full_name.toLowerCase().includes(searchText.toLowerCase()) ||
-              debtor.phone.includes(searchText) ||
+              !searchText || 
+              (debtor.full_name && debtor.full_name.toLowerCase().includes(searchText.toLowerCase())) ||
+              (debtor.phone && debtor.phone.includes(searchText)) ||
               debtor.id.toString().includes(searchText)
             )}
             rowKey="id"
@@ -459,7 +465,7 @@ export const Debtors = () => {
                   <Option value="RETURNED">{t('debtors.returned')}</Option>
                 </Select>
               </Col>
-              <Col xs={24} sm={12} md={8}>
+              <Col xs={24} sm={12} md={4}>
                 <Space style={{ width: '100%' }}>
                   <Button
                     type="primary"
@@ -486,8 +492,9 @@ export const Debtors = () => {
           <Table
             columns={operationColumns}
             dataSource={operations.filter(operation => 
-              operation.debtor_name.toLowerCase().includes(operationsSearchText.toLowerCase()) ||
-              operation.description.toLowerCase().includes(operationsSearchText.toLowerCase()) ||
+              !operationsSearchText || 
+              (operation.debtor_name && operation.debtor_name.toLowerCase().includes(operationsSearchText.toLowerCase())) ||
+              (operation.description && operation.description.toLowerCase().includes(operationsSearchText.toLowerCase())) ||
               operation.id.toString().includes(operationsSearchText)
             )}
             rowKey="id"
@@ -546,27 +553,27 @@ export const Debtors = () => {
           <Form.Item
             label={t('common.phone')}
             name="phone"
-            rules={[{ required: true, message: t('debtors.enterPhone', { defaultValue: 'Введите номер телефона' }) }]}
           >
             <Input placeholder={t('debtors.enterPhone', { defaultValue: 'Введите номер телефона' })} />
           </Form.Item>
           
-          <Form.Item
-            label={t('debtors.debtAmount')}
-            name="debt_amount"
-            rules={[
-              { required: true, message: t('debtors.enterDebtAmount', { defaultValue: 'Введите сумму долга' }) },
-              { type: 'number', min: 0, message: 'Сумма не может быть отрицательной' }
-            ]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="Введите сумму долга"
-              min={0}
-              step={0.01}
-              precision={2}
-            />
-          </Form.Item>
+          {!editingDebtor && (
+            <Form.Item
+              label={t('debtors.debtAmount')}
+              name="debt_amount"
+              rules={[
+                { type: 'number', min: 0, message: 'Сумма не может быть отрицательной' }
+              ]}
+            >
+              <InputNumber
+                style={{ width: '100%' }}
+                placeholder="Введите сумму долга"
+                min={0}
+                step={0.01}
+                precision={2}
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
 
