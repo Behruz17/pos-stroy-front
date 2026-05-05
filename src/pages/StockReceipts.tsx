@@ -21,6 +21,9 @@ export const StockReceipts = () => {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [receiptItems, setReceiptItems] = useState<CreateStockReceiptItem[]>([]);
+  const [deliveryCost, setDeliveryCost] = useState<number | undefined>();
+  const [formCurrency, setFormCurrency] = useState<string>('TJS');
+  const [formRate, setFormRate] = useState<number>(1);
   const [selectedReceipt, setSelectedReceipt] = useState<StockReceipt | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [loadingReceiptDetails, setLoadingReceiptDetails] = useState(false);
@@ -115,18 +118,90 @@ export const StockReceipts = () => {
         return;
       }
 
+      // Validate calculation method for each item
+      for (const item of receiptItems) {
+        const hasTonnageCalculation = item.tonnage && item.price_per_ton;
+        const hasDirectCost = item.purchase_cost && item.purchase_cost > 0;
+        
+        if (!hasTonnageCalculation && !hasDirectCost) {
+          message.error('Для каждой позиции укажите либо (Тонна + Цена за тонну), либо Цену закупки');
+          return;
+        }
+        
+        if (!item.selling_price || item.selling_price <= 0) {
+          message.error('Для каждой позиции укажите цену продажи');
+          return;
+        }
+      }
+
+      // Подготавливаем товары для отправки, удаляя ненужные поля
+      const preparedItems = receiptItems.map(item => {
+        const hasTonnageCalculation = item.tonnage && item.price_per_ton;
+        
+        if (hasTonnageCalculation) {
+          // Расчет по тоннам - отправляем тонна и цена за тонну
+          return {
+            product_id: item.product_id,
+            quantity: item.quantity,
+            purchase_cost: item.purchase_cost,
+            actual_cost: item.actual_cost,
+            selling_price: item.selling_price,
+            tonnage: item.tonnage,
+            price_per_ton: item.price_per_ton,
+            batch_code: item.batch_code
+          };
+        } else {
+          // Прямая цена закупки - отправляем tonnage и price_per_ton как null
+          return {
+            product_id: item.product_id,
+            quantity: item.quantity,
+            purchase_cost: item.purchase_cost,
+            actual_cost: item.actual_cost,
+            selling_price: item.selling_price,
+            tonnage: null,
+            price_per_ton: null,
+            batch_code: item.batch_code
+          };
+        }
+      });
+
+      console.log('Form values before create:', values);
+      console.log('Delivery cost from form:', values.delivery_cost);
+      console.log('Delivery cost from state:', deliveryCost);
+      
       const createData: CreateStockReceiptRequest = {
         supplier_id: values.supplier_id,
         currency: values.currency,
         rate: values.currency !== 'TJS' ? values.rate : 1,
-        items: receiptItems,
+        delivery_cost: values.delivery_cost || undefined,
+        items: preparedItems,
       };
 
+      // Рассчитываем общую сумму для проверки
+      const calculatedTotal = preparedItems.reduce((sum, item) => 
+        sum + (item.purchase_cost * item.quantity), 0
+      );
+      console.log('Calculated total amount:', calculatedTotal);
+      
       console.log('Creating stock receipt with data:', createData);
+      console.log('Prepared items:', preparedItems);
+      preparedItems.forEach((item, index) => {
+        console.log(`Item ${index}:`, {
+          product_id: item.product_id,
+          quantity: item.quantity,
+          purchase_cost: item.purchase_cost,
+          selling_price: item.selling_price,
+          tonnage: item.tonnage,
+          price_per_ton: item.price_per_ton
+        });
+      });
       await stockReceiptsApi.create(createData);
       message.success(t('stockReceipts.receiptCreated', { defaultValue: 'Приход успешно создан' }));
       form.resetFields();
       setReceiptItems([]);
+      setDeliveryCost(undefined);
+      setFormCurrency('TJS');
+      setFormRate(1);
       setActiveTab('list');
       fetchStockReceipts();
     } catch (error: unknown) {
@@ -147,8 +222,9 @@ export const StockReceipts = () => {
   const addReceiptItem = () => {
     const newItem: CreateStockReceiptItem = {
       product_id: 0,
-      quantity: 1,
+      quantity: 0,
       purchase_cost: 0,
+      actual_cost: 0,
       selling_price: 0,
     };
     setReceiptItems([...receiptItems, newItem]);
@@ -158,12 +234,136 @@ export const StockReceipts = () => {
     console.log(`Before update - item ${index}:`, receiptItems[index]);
     const updatedItems = [...receiptItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
+    
+    // Автоматический расчет цен при использовании тоннажа и цены за тонну
+    const item = updatedItems[index];
+    if (item.tonnage && item.price_per_ton && item.quantity && 
+        (field === 'tonnage' || field === 'price_per_ton' || field === 'quantity')) {
+      // Расчет базовой цены: (tonnage × price_per_ton) / quantity
+      const purchaseCost = (item.tonnage * item.price_per_ton) / item.quantity;
+      
+      // Расчет себестоимости с доставкой
+      let actualCost = purchaseCost;
+      
+      // Добавляем долю доставки если она есть
+      if (deliveryCost && deliveryCost > 0) {
+        // Конвертируем доставку из TJS в валюту прихода
+        const deliveryCostInCurrency = formCurrency === 'TJS' ? deliveryCost : deliveryCost / formRate;
+        
+        const totalQuantity = updatedItems.reduce((sum, item) => 
+          item.quantity ? sum + item.quantity : sum, 0
+        );
+        
+        if (totalQuantity > 0 && item.quantity) {
+          const deliveryShare = (item.quantity / totalQuantity) * deliveryCostInCurrency;
+          actualCost = purchaseCost + (deliveryShare / item.quantity);
+        }
+      }
+      
+      updatedItems[index] = { 
+        ...item, 
+        purchase_cost: purchaseCost,
+        actual_cost: actualCost
+      };
+      console.log(`Calculated costs for item ${index}:`, { purchaseCost, actualCost });
+    }
+    
+    // Если вводится прямая цена закупки, очищаем тоннаж и цену за тонну
+    if (field === 'purchase_cost' && value && value > 0) {
+      updatedItems[index] = { 
+        ...item, 
+        tonnage: undefined, 
+        price_per_ton: undefined,
+        actual_cost: value // Себестоимость равна цене закупки (без доставки)
+      };
+    }
+    
     console.log(`After update - item ${index}:`, updatedItems[index]);
     setReceiptItems(updatedItems);
   };
 
   const removeReceiptItem = (index: number) => {
     setReceiptItems(receiptItems.filter((_, i) => i !== index));
+  };
+
+  // Функция для обработки потери фокуса поля цены закупки (без автоматического расчета доставки)
+  const handlePurchaseCostBlur = (index: number, value: number) => {
+    // Просто сохраняем введенную цену без добавления доставки
+    console.log(`Purchase cost set manually for item ${index}:`, value);
+  };
+
+  // Функция для перерасчета цен закупки с учетом доставки
+  const recalculatePurchaseCostsWithDelivery = (newDeliveryCost: number | undefined, overrideRate?: number) => {
+    if (!newDeliveryCost || newDeliveryCost <= 0) {
+      // Если доставки нет, пересчитываем только по тоннам
+      const updatedItems = receiptItems.map(item => {
+        if (item.tonnage && item.price_per_ton && item.quantity) {
+          const calculatedCost = (item.tonnage * item.price_per_ton) / item.quantity;
+          return { ...item, purchase_cost: calculatedCost };
+        }
+        return item;
+      });
+      setReceiptItems(updatedItems);
+      return;
+    }
+
+    // Конвертируем доставку из TJS в валюту прихода
+    const currentRate = overrideRate !== undefined ? overrideRate : formRate;
+    const deliveryCostInCurrency = formCurrency === 'TJS' ? newDeliveryCost : newDeliveryCost / currentRate;
+    console.log('Delivery cost conversion:', { 
+      newDeliveryCost, 
+      formCurrency, 
+      formRate, 
+      deliveryCostInCurrency 
+    });
+
+    // Распределяем доставку пропорционально между товарами
+    const totalQuantity = receiptItems.reduce((sum, item) => 
+      item.quantity ? sum + item.quantity : sum, 0
+    );
+    
+    const updatedItems = receiptItems.map(item => {
+      if (!item.quantity) return item;
+      
+      // Обрабатываем только товары с расчетом по тоннам
+      if (item.tonnage && item.price_per_ton) {
+        const purchaseCost = (item.tonnage * item.price_per_ton) / item.quantity;
+        
+        if (totalQuantity > 0) {
+          // Доля доставки пропорционально метражу (quantity)
+          const deliveryShare = (item.quantity / totalQuantity) * deliveryCostInCurrency;
+          
+          // Себестоимость с доставкой
+          const actualCost = purchaseCost + (deliveryShare / item.quantity);
+          
+          return { 
+            ...item, 
+            purchase_cost: purchaseCost,
+            actual_cost: actualCost
+          };
+        }
+      }
+      
+      // Товары с прямой ценой закупки - добавляем доставку к actual_cost
+      if (item.purchase_cost && !item.tonnage && !item.price_per_ton) {
+        if (totalQuantity > 0) {
+          // Доля доставки пропорционально метражу (quantity)
+          const deliveryShare = (item.quantity / totalQuantity) * deliveryCostInCurrency;
+          
+          // Себестоимость с доставкой
+          const actualCost = item.purchase_cost + (deliveryShare / item.quantity);
+          
+          return { 
+            ...item, 
+            actual_cost: actualCost
+          };
+        }
+      }
+      
+      return item;
+    });
+    
+    setReceiptItems(updatedItems);
   };
 
   
@@ -190,10 +390,10 @@ export const StockReceipts = () => {
       title: t('common.totalAmount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number, record: StockReceipt) => (
+      render: (amount: string, record: StockReceipt) => (
         <span style={{ color: '#52c41a' }}>
           <DollarOutlined style={{ marginRight: 4 }} />
-          {amount.toLocaleString()} {record.currency}
+          {parseFloat(amount).toLocaleString()} {record.currency}
         </span>
       ),
     },
@@ -237,31 +437,63 @@ export const StockReceipts = () => {
       width: 80,
     },
     {
+      title: t('stockReceipts.tonnage', { defaultValue: 'Тонна' }),
+      dataIndex: 'tonnage',
+      key: 'tonnage',
+      width: 100,
+      render: (tonnage: string | null | undefined) => tonnage ? parseFloat(tonnage).toFixed(3) : '-',
+    },
+    {
+      title: t('stockReceipts.pricePerTon', { defaultValue: 'Цена/тонна' }),
+      dataIndex: 'price_per_ton',
+      key: 'price_per_ton',
+      width: 120,
+      render: (price: string | null | undefined) => price ? parseFloat(price).toLocaleString() : '-',
+    },
+    {
       title: t('suppliers.purchasePrice'),
       dataIndex: 'purchase_cost',
       key: 'purchase_cost',
-      render: (cost: number) => cost.toLocaleString(),
+      render: (cost: string) => parseFloat(cost).toLocaleString(),
       width: 100,
     },
     {
       title: t('stockReceipts.purchaseCostConverted', { defaultValue: 'Цена закупки (TJS)' }),
       dataIndex: 'purchase_cost_converted',
       key: 'purchase_cost_converted',
-      render: (cost: number | null | undefined) => {
-        if (!cost && cost !== 0) return '-';
+      render: (cost: string | null | undefined) => {
+        if (!cost && cost !== '0') return '-';
         return (
           <span style={{ color: '#52c41a' }}>
-            {cost.toLocaleString()} TJS
+            {parseFloat(cost).toLocaleString()} TJS
           </span>
         );
       },
       width: 120,
     },
     {
+      title: t('stockReceipts.actualCost', { defaultValue: 'Себестоимость' }),
+      dataIndex: 'actual_cost',
+      key: 'actual_cost',
+      render: (cost: string, record: StockReceiptItem) => {
+        if (!cost) return '-';
+        // Находим родительский приход для получения валюты
+        const parentReceipt = stockReceipts.find(sr => sr.id === record.stock_receipt_id);
+        const currency = parentReceipt?.currency || 'TJS';
+        return (
+          <span style={{ color: '#52c41a' }}>
+            <DollarOutlined style={{ marginRight: 4 }} />
+            {parseFloat(cost).toLocaleString()} {currency}
+          </span>
+        );
+      },
+      width: 100,
+    },
+    {
       title: t('suppliers.sellingPrice'),
       dataIndex: 'selling_price',
       key: 'selling_price',
-      render: (price: number) => price.toLocaleString(),
+      render: (price: string) => parseFloat(price).toLocaleString(),
       width: 100,
     },
     {
@@ -269,7 +501,7 @@ export const StockReceipts = () => {
       key: 'total',
       render: (_, record: StockReceiptItem) => {
         const qty = record?.quantity || 0;
-        const cost = record?.purchase_cost || 0;
+        const cost = parseFloat(record?.purchase_cost) || 0;
         return <strong>{(qty * cost).toLocaleString()} {currency || ''}</strong>;
       },
       width: 120,
@@ -382,6 +614,11 @@ export const StockReceipts = () => {
                           const supplier = suppliers.find(s => s.id === value);
                           if (supplier?.currency) {
                             form.setFieldValue('currency', supplier.currency);
+                            setFormCurrency(supplier.currency);
+                            // Пересчитываем цены с доставкой при смене поставщика (и валюты)
+                            if (deliveryCost) {
+                              recalculatePurchaseCostsWithDelivery(deliveryCost);
+                            }
                           }
                         }}
                       >
@@ -431,10 +668,64 @@ export const StockReceipts = () => {
                           style={{ width: '100%' }}
                           prefix={<SwapOutlined />}
                           placeholder={t('stockReceipts.enterRate', { defaultValue: 'Введите курс к TJS' })}
+                          onChange={(value) => {
+                            console.log('Rate changed:', value);
+                            const newRate = value || 1;
+                            setFormRate(newRate);
+                            // Пересчитываем цены с доставкой при изменении курса
+                            if (deliveryCost) {
+                              console.log('Recalculating with delivery cost:', deliveryCost, 'new rate:', newRate);
+                              recalculatePurchaseCostsWithDelivery(deliveryCost, newRate);
+                            }
+                          }}
                         />
                       </Form.Item>
                     ) : null;
                   }}
+                </Form.Item>
+
+                <Form.Item
+                  name="delivery_cost"
+                  label={t('stockReceipts.deliveryCost', { defaultValue: 'Стоимость доставки (TJS)' })}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.01}
+                    precision={2}
+                    style={{ width: '100%' }}
+                    onChange={(value: number | string | null) => {
+                      console.log('Delivery cost input changed:', value);
+                      const numValue = value === null ? undefined : typeof value === 'number' ? value : parseFloat(String(value));
+                      setDeliveryCost(numValue);
+                      // Синхронизируем значение в форме
+                      form.setFieldValue('delivery_cost', numValue);
+                      recalculatePurchaseCostsWithDelivery(numValue);
+                    }}
+                    formatter={(value: number | string | undefined) => {
+                      if (!value) return '';
+                      const num = typeof value === 'number' ? value : parseFloat(String(value));
+                      return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                    }}
+                    parser={(value) => {
+                      if (!value) return 0;
+                      return parseFloat(value.replace(/,/g, '')) || 0;
+                    }}
+                  />
+                  {deliveryCost && deliveryCost > 0 && formCurrency !== 'TJS' && (
+                    <div style={{ 
+                      marginTop: 8, 
+                      padding: '8px 12px', 
+                      backgroundColor: '#f6f8fa', 
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#666'
+                    }}>
+                      💰 {t('stockReceipts.deliveryCostInCurrency', { defaultValue: 'Стоимость доставки в валюте прихода' })}: 
+                      <strong style={{ color: '#1890ff', marginLeft: 4 }}>
+                        {(deliveryCost / formRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {formCurrency}
+                      </strong>
+                    </div>
+                  )}
                 </Form.Item>
 
                 <Form.Item label={t('stockReceipts.items')}>
@@ -540,8 +831,57 @@ export const StockReceipts = () => {
                         </Col>
                         <Col xs={12} sm={6}>
                           <Form.Item
+                            label={t('stockReceipts.tonnage', { defaultValue: 'Тонна' })}
+                          >
+                            <InputNumber
+                              placeholder={t('stockReceipts.tonnagePlaceholder', { defaultValue: 'Тонны' })}
+                              min={0}
+                              step={0.001}
+                              precision={3}
+                              value={item.tonnage || undefined}
+                              onChange={(value) => updateReceiptItem(index, 'tonnage', value || undefined)}
+                              disabled={!!(item.purchase_cost && item.purchase_cost > 0 && !item.tonnage && !item.price_per_ton)}
+                              formatter={(value) => {
+                                if (!value) return '';
+                                const num = parseFloat(value.toString());
+                                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                              }}
+                              parser={(value) => {
+                                if (!value) return 0;
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                              }}
+                              style={{ width: '100%' }}
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <Form.Item
+                            label={t('stockReceipts.pricePerTon', { defaultValue: 'Цена за тонну' })}
+                          >
+                            <InputNumber
+                              placeholder={t('stockReceipts.pricePerTonPlaceholder', { defaultValue: 'Цена/тонна' })}
+                              min={0}
+                              step={0.01}
+                              precision={2}
+                              value={item.price_per_ton || undefined}
+                              onChange={(value) => updateReceiptItem(index, 'price_per_ton', value || undefined)}
+                              disabled={!!(item.purchase_cost && item.purchase_cost > 0 && !item.tonnage && !item.price_per_ton)}
+                              formatter={(value) => {
+                                if (!value) return '';
+                                const num = parseFloat(value.toString());
+                                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                              }}
+                              parser={(value) => {
+                                if (!value) return 0;
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                              }}
+                              style={{ width: '100%' }}
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <Form.Item
                             label={t('stockReceipts.purchaseCost')}
-                            required
                           >
                             <InputNumber
                               placeholder={t('common.price')}
@@ -549,7 +889,46 @@ export const StockReceipts = () => {
                               step={0.01}
                               value={item.purchase_cost || undefined}
                               onChange={(value) => updateReceiptItem(index, 'purchase_cost', value || 0)}
+                              onBlur={(e) => {
+                                const value = parseFloat(e.target.value);
+                                if (value && value > 0) {
+                                  handlePurchaseCostBlur(index, value);
+                                }
+                              }}
+                              disabled={!!(item.tonnage && item.price_per_ton && item.quantity && item.purchase_cost)}
+                              formatter={(value) => {
+                                if (!value) return '';
+                                const num = parseFloat(value.toString());
+                                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                              }}
+                              parser={(value) => {
+                                if (!value) return 0;
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                              }}
                               style={{ width: '100%' }}
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} sm={6}>
+                          <Form.Item
+                            label={t('stockReceipts.actualCost', { defaultValue: 'Себестоимость' })}
+                          >
+                            <InputNumber
+                              placeholder={t('common.cost')}
+                              min={0}
+                              step={0.01}
+                              value={item.actual_cost || undefined}
+                              disabled
+                              style={{ width: '100%' }}
+                              formatter={(value) => {
+                                if (!value) return '';
+                                const num = parseFloat(value.toString());
+                                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                              }}
+                              parser={(value) => {
+                                if (!value) return 0;
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                              }}
                             />
                           </Form.Item>
                         </Col>
@@ -557,6 +936,7 @@ export const StockReceipts = () => {
                           <Form.Item
                             label={t('stockReceipts.sellingPrice')}
                             required
+                            rules={[{ required: true, message: t('errors.required') }]}
                           >
                             <InputNumber
                               placeholder={t('common.price')}
@@ -564,6 +944,15 @@ export const StockReceipts = () => {
                               step={0.01}
                               value={item.selling_price || undefined}
                               onChange={(value) => updateReceiptItem(index, 'selling_price', value || 0)}
+                              formatter={(value) => {
+                                if (!value) return '';
+                                const num = parseFloat(value.toString());
+                                return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                              }}
+                              parser={(value) => {
+                                if (!value) return 0;
+                                return parseFloat(value.replace(/,/g, '')) || 0;
+                              }}
                               style={{ width: '100%' }}
                             />
                           </Form.Item>
@@ -651,12 +1040,30 @@ export const StockReceipts = () => {
               </Col>
               <Col span={8}>
                 <Tag color="orange" icon={<DollarOutlined />}>
-                  {t('common.total')}: {selectedReceipt.total_amount.toLocaleString()} {selectedReceipt.currency}
+                  {t('common.total')}: {parseFloat(selectedReceipt.total_amount).toLocaleString()} {selectedReceipt.currency}
                   {/* {selectedReceipt.currency !== 'TJS' && selectedReceipt.total_amount_converted && (
                     <> | {selectedReceipt.total_amount_converted.toFixed(2).toLocaleString()} TJS</>
                   )} */}
                 </Tag>
               </Col>
+              {selectedReceipt.delivery_cost && (
+                <Col span={8}>
+                  <Tag color="purple" icon={<DollarOutlined />}>
+                    {t('stockReceipts.deliveryCost', { defaultValue: 'Доставка' })}: {parseFloat(selectedReceipt.delivery_cost).toLocaleString()} TJS
+                  </Tag>
+                </Col>
+              )}
+              {selectedReceipt.items && selectedReceipt.items.length > 0 && (
+                <Col span={8}>
+                  <Tag color="green" icon={<DollarOutlined />}>
+                    {t('stockReceipts.totalActualCost', { defaultValue: 'Общая себестоимость' })}: {
+                      selectedReceipt.items.reduce((sum, item) => 
+                        sum + (parseFloat(item.actual_cost) * item.quantity), 0
+                      ).toLocaleString()
+                    } {selectedReceipt.currency}
+                  </Tag>
+                </Col>
+              )}
                           </Row>
             
             {loadingReceiptDetails ? (

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag, Spin, DatePicker, Statistic } from 'antd';
+import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag, Spin, DatePicker, Statistic, Collapse } from 'antd';
+const { Panel } = Collapse;
 import { useTranslation } from 'react-i18next';
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, CalendarOutlined, UserOutlined, PrinterOutlined, HistoryOutlined, CheckCircleOutlined, CarOutlined, ShoppingOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style } from '../api';
@@ -13,6 +14,12 @@ interface CreateSaleItemLocal {
   unit_value?: number;
   stock_item_id?: number;
   style_id?: number;
+}
+
+interface ProductGroup {
+  productId: number;
+  stock_item_id?: number;
+  items: CreateSaleItemLocal[];
 }
 
 const { Title, Text } = Typography;
@@ -57,6 +64,8 @@ export const Sales = () => {
   const [addingPayment, setAddingPayment] = useState(false);
   const [productStockItems, setProductStockItems] = useState<Record<number, StockItem[]>>({});
   const [loadingStockItems, setLoadingStockItems] = useState<Record<number, boolean>>({});
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
+  const [editProductGroups, setEditProductGroups] = useState<ProductGroup[]>([]);
 
   const fetchSales = async () => {
     setLoading(true);
@@ -87,6 +96,14 @@ export const Sales = () => {
     try {
       const data = await customersApi.getAll();
       setCustomers(data);
+      
+      // Автоматически выбираем клиента "Розница"
+      const defaultCustomer = data.find(customer => 
+        customer.full_name.toLowerCase().includes('розница')
+      );
+      if (defaultCustomer) {
+        form.setFieldValue('customer_id', defaultCustomer.id);
+      }
     } catch (error: unknown) {
       message.error(t('customers.errorLoading', { defaultValue: 'Ошибка при загрузке клиентов' }));
     }
@@ -95,6 +112,7 @@ export const Sales = () => {
   const fetchProducts = async () => {
     try {
       const data = await productsApi.getAll();
+      // Show all products (both main and batch items)
       setProducts(data);
     } catch (error: unknown) {
       message.error(t('products.errorLoading'));
@@ -113,7 +131,10 @@ export const Sales = () => {
     if (productStockItems[productId]) return; // already cached
     setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
     try {
-      const response = await stockItemsApi.getByProductId(productId);
+      // Use product_id for API request
+      const product = products.find(p => p.id === productId);
+      const actualProductId = product?.id || productId;
+      const response = await stockItemsApi.getByProductId(actualProductId);
       setProductStockItems(prev => ({ ...prev, [productId]: response.batches || [] }));
     } catch (error) {
       console.error(`Failed to load stock items for product ${productId}:`, error);
@@ -223,6 +244,32 @@ export const Sales = () => {
         return;
       }
 
+      // Group items by product and validate
+      const groupedItems = new Map<number, CreateSaleItemLocal[]>();
+      saleItems.forEach(item => {
+        if (!groupedItems.has(item.product_id)) {
+          groupedItems.set(item.product_id, []);
+        }
+        groupedItems.get(item.product_id)!.push(item);
+      });
+
+      // Validate each group
+      for (const [productId, items] of groupedItems.entries()) {
+        const selectedProduct = products.find(p => p.id === productId);
+        if (selectedProduct?.type === 'batch') {
+          const groupBatchId = productGroups.find(g => g.productId === productId)?.stock_item_id;
+          if (!groupBatchId) {
+            message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+            setCreating(false);
+            return;
+          }
+          // Apply group batch to all items in the group
+          items.forEach(item => {
+            item.stock_item_id = groupBatchId;
+          });
+        }
+      }
+
       // Validate each sale item
       for (const item of saleItems) {
         if (!item.product_id || item.product_id === 0) {
@@ -232,6 +279,7 @@ export const Sales = () => {
         }
         const selectedProduct = products.find(p => p.id === item.product_id);
         if (selectedProduct?.type === 'batch' && !item.stock_item_id) {
+          // This should not happen as we set it above, but keep as fallback
           message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
           setCreating(false);
           return;
@@ -355,6 +403,23 @@ export const Sales = () => {
           unit_value: item.unit_value || 1.0,
         }));
         setEditSaleItems(items);
+        
+        // Group items by product for edit product groups
+        const groupedItems = new Map<number, UpdateSaleItem[]>();
+        items.forEach(item => {
+          if (!groupedItems.has(item.product_id)) {
+            groupedItems.set(item.product_id, []);
+          }
+          groupedItems.get(item.product_id)!.push(item);
+        });
+        
+        const newEditProductGroups: ProductGroup[] = Array.from(groupedItems.entries()).map(([productId, items]) => ({
+          productId,
+          stock_item_id: items.find(item => item.stock_item_id)?.stock_item_id,
+          items: []
+        }));
+        setEditProductGroups(newEditProductGroups);
+        
         // Preload stock items for batch products
         items.forEach(item => {
           const product = products.find(p => p.id === item.product_id);
@@ -378,7 +443,32 @@ export const Sales = () => {
       return;
     }
 
-    // Validate items
+    // Group items by product and validate
+    const groupedEditItems = new Map<number, UpdateSaleItem[]>();
+    editSaleItems.forEach(item => {
+      if (!groupedEditItems.has(item.product_id)) {
+        groupedEditItems.set(item.product_id, []);
+      }
+      groupedEditItems.get(item.product_id)!.push(item);
+    });
+
+    // Validate each group
+    for (const [productId, items] of groupedEditItems.entries()) {
+      const selectedProduct = products.find(p => p.id === productId);
+      if (selectedProduct?.type === 'batch') {
+        const groupBatchId = editProductGroups.find(g => g.productId === productId)?.stock_item_id;
+        if (!groupBatchId) {
+          message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+          return;
+        }
+        // Apply group batch to all items in the group
+        items.forEach(item => {
+          item.stock_item_id = groupBatchId;
+        });
+      }
+    }
+
+    // Validate each sale item
     for (const item of editSaleItems) {
       if (!item.product_id || item.product_id === 0) {
         message.error(t('sales.selectProductForAll', { defaultValue: 'Выберите товар для всех позиций' }));
@@ -386,6 +476,7 @@ export const Sales = () => {
       }
       const selectedProduct = products.find(p => p.id === item.product_id);
       if (selectedProduct?.type === 'batch' && !item.stock_item_id) {
+        // This should not happen as we set it above, but keep as fallback
         message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
         return;
       }
@@ -439,6 +530,7 @@ export const Sales = () => {
       setEditModalVisible(false);
       setEditingSale(null);
       setEditSaleItems([]);
+      setEditProductGroups([]);
       form.resetFields();
       fetchSales();
     } catch (error: unknown) {
@@ -543,9 +635,9 @@ export const Sales = () => {
   const addSaleItem = () => {
     const newItem: CreateSaleItemLocal = {
       product_id: 0,
-      quantity: 1,
+      quantity: 0,
       unit_price: 0,
-      unit_value: 1.0,
+      unit_value: 0,
       stock_item_id: undefined,
       style_id: undefined,
     };
@@ -567,13 +659,15 @@ export const Sales = () => {
       const product = products.find(p => p.id === Number(productId));
       const totalMeters = items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0);
       const totalPrice = items.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+      const group = productGroups.find(g => g.productId === Number(productId));
       
       return {
         productId: Number(productId),
         product,
         items,
         totalMeters,
-        totalPrice
+        totalPrice,
+        stock_item_id: group?.stock_item_id
       };
     });
   };
@@ -587,8 +681,19 @@ export const Sales = () => {
       const selected = products.find(p => p.id === value);
       if (selected?.type !== 'batch') {
         updatedItems[index].stock_item_id = undefined;
+        // Remove group batch if product is not batch
+        setProductGroups(prev => prev.filter(g => g.productId !== value));
       } else {
         fetchProductStockItems(value);
+        // Create or update group for batch product
+        setProductGroups(prev => {
+          const existing = prev.find(g => g.productId === value);
+          if (existing) {
+            return prev.map(g => g.productId === value ? { ...g, productId: value } : g);
+          } else {
+            return [...prev, { productId: value, items: [] }];
+          }
+        });
       }
       // Auto-populate unit_price from product selling_price
       if (selected?.selling_price) {
@@ -596,16 +701,123 @@ export const Sales = () => {
       }
     }
     
-    // Auto-populate unit_price from selected batch selling_price
-    if (field === 'stock_item_id' && value) {
-      const stockItems = productStockItems[updatedItems[index].product_id] || [];
-      const selectedBatch = stockItems.find(si => si.id === value);
-      if (selectedBatch?.selling_price) {
-        updatedItems[index].unit_price = selectedBatch.selling_price;
+    setSaleItems(updatedItems);
+  };
+
+  const updateProductGroupBatch = (productId: number, stockItemId: number | undefined) => {
+    setProductGroups(prev => {
+      const existing = prev.find(g => g.productId === productId);
+      if (existing) {
+        return prev.map(g => g.productId === productId ? { ...g, stock_item_id: stockItemId } : g);
+      } else {
+        return [...prev, { productId, stock_item_id: stockItemId, items: [] }];
+      }
+    });
+
+    // Update all items of this product with the new batch
+    setSaleItems(prev => prev.map(item => {
+      if (item.product_id === productId) {
+        const updatedItem = { ...item, stock_item_id: stockItemId };
+        // Auto-populate unit_price from selected batch selling_price
+        if (stockItemId) {
+          const stockItems = productStockItems[productId] || [];
+          const selectedBatch = stockItems.find(si => si.id === stockItemId);
+          if (selectedBatch?.selling_price) {
+            updatedItem.unit_price = selectedBatch.selling_price;
+          }
+        }
+        return updatedItem;
+      }
+      return item;
+    }));
+  };
+
+  const updateEditProductGroupBatch = (productId: number, stockItemId: number | undefined) => {
+    setEditProductGroups(prev => {
+      const existing = prev.find(g => g.productId === productId);
+      if (existing) {
+        return prev.map(g => g.productId === productId ? { ...g, stock_item_id: stockItemId } : g);
+      } else {
+        return [...prev, { productId, stock_item_id: stockItemId, items: [] }];
+      }
+    });
+
+    // Update all items of this product with the new batch
+    setEditSaleItems(prev => prev.map(item => {
+      if (item.product_id === productId) {
+        const updatedItem = { ...item, stock_item_id: stockItemId };
+        // Auto-populate unit_price from selected batch selling_price
+        if (stockItemId) {
+          const stockItems = productStockItems[productId] || [];
+          const selectedBatch = stockItems.find(si => si.id === stockItemId);
+          if (selectedBatch?.selling_price) {
+            updatedItem.unit_price = selectedBatch.selling_price;
+          }
+        }
+        return updatedItem;
+      }
+      return item;
+    }));
+  };
+
+  // Group edit sale items by product for UI display
+  const getGroupedEditSaleItems = () => {
+    const groups = new Map<number, UpdateSaleItem[]>();
+    
+    editSaleItems.forEach(item => {
+      if (!groups.has(item.product_id)) {
+        groups.set(item.product_id, []);
+      }
+      groups.get(item.product_id)!.push(item);
+    });
+    
+    return Array.from(groups.entries()).map(([productId, items]) => {
+      const product = products.find(p => p.id === Number(productId));
+      const totalMeters = items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0);
+      const totalPrice = items.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+      const group = editProductGroups.find(g => g.productId === Number(productId));
+      
+      return {
+        productId: Number(productId),
+        product,
+        items,
+        totalMeters,
+        totalPrice,
+        stock_item_id: group?.stock_item_id
+      };
+    });
+  };
+
+  const updateEditSaleItem = (index: number, field: keyof UpdateSaleItem, value: any) => {
+    const updatedItems = [...editSaleItems];
+    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    
+    // Reset stock_item_id if product changes and is not batch
+    if (field === 'product_id') {
+      const selected = products.find(p => p.id === value);
+      if (selected?.type !== 'batch') {
+        updatedItems[index].stock_item_id = undefined;
+        // Remove group batch if product is not batch
+        setEditProductGroups(prev => prev.filter(g => g.productId !== value));
+      } else {
+        fetchProductStockItems(value);
+        // Create or update group for batch product
+        setEditProductGroups(prev => {
+          const existing = prev.find(g => g.productId === value);
+          if (existing) {
+            return prev.map(g => g.productId === value ? { ...g, productId: value } : g);
+          } else {
+            return [...prev, { productId: value, items: [] }];
+          }
+        });
+      }
+      // Auto-populate unit_price from product selling_price
+      if (selected?.selling_price) {
+        updatedItems[index].unit_price = selected.selling_price;
       }
     }
     
-    setSaleItems(updatedItems);
+    setEditSaleItems(updatedItems);
   };
 
   const removeSaleItem = (index: number) => {
@@ -786,7 +998,7 @@ export const Sales = () => {
                 <div class="receipt-group-name">${productName}</div>
                 ${items.map(item => `
                   <div class="receipt-item-details" style="text-align: right; margin-bottom: 2px;">
-                    ${item.quantity}${item.unit_value ? `×${item.unit_value}` : ''} ${item.style_name ? `(${item.style_name})` : ''} × ${(item.unit_price).toLocaleString()} = ${(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()}
+                    ${parseFloat(item.quantity.toString()).toString()}${item.unit_value ? `×${parseFloat(item.unit_value.toString()).toString()}м` : ''} ${item.style_name ? `(${item.style_name})` : ''} × ${parseFloat(item.unit_price.toString()).toString()} смн = ${(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()} смн
                   </div>
                 `).join('')}
               </div>
@@ -824,12 +1036,6 @@ export const Sales = () => {
       render: (_: unknown, __: any, index: number) => index + 1,
     },
     {
-      title: t('common.date'),
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date: string) => new Date(date).toLocaleDateString(),
-    },
-    {
       title: t('sales.customer'),
       dataIndex: 'customer_name',
       key: 'customer_name',
@@ -847,6 +1053,43 @@ export const Sales = () => {
       ),
     },
     {
+      title: t('sales.discount', { defaultValue: 'Скидка' }),
+      dataIndex: 'discount',
+      key: 'discount',
+      render: (discount: string) => {
+        const discountValue = parseFloat(discount) || 0;
+        if (discountValue > 0) {
+          return (
+            <span style={{ color: '#ff4d4f' }}>
+              <DollarOutlined style={{ marginRight: 4 }} />
+              {discountValue.toLocaleString()}
+            </span>
+          );
+        }
+        return '-';
+      },
+    },
+    {
+      title: t('common.items'),
+      key: 'items',
+      render: (_: any, record: Sale) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <Collapse ghost size="small">
+            <Panel header={`${record.items?.length || 0} ${t('common.items', { defaultValue: 'товаров' })}`} key="1">
+              {record.items?.map((item: SaleItem, idx: number) => (
+                <div key={idx} style={{ padding: '4px 0', fontSize: 12, borderBottom: idx < (record.items?.length || 0) - 1 ? '1px solid #f0f0f0' : 'none' }}>
+                  <div style={{ fontWeight: 500 }}>{item.product_name}</div>
+                  <div style={{ color: '#666' }}>
+                    {item.quantity} × {item.unit_price.toLocaleString()} = {item.total_price.toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </Panel>
+          </Collapse>
+        </div>
+      ),
+    },
+    {
       title: t('sales.paymentStatus', { defaultValue: 'Статус оплаты' }),
       dataIndex: 'payment_status',
       key: 'payment_status',
@@ -861,6 +1104,12 @@ export const Sales = () => {
       dataIndex: 'stage',
       key: 'stage',
       render: (stage: SaleStage) => getStageTag(stage),
+    },
+    {
+      title: t('common.date'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
       title: t('common.actions'),
@@ -944,7 +1193,13 @@ export const Sales = () => {
             okText={t('common.yes')}
             cancelText={t('common.no')}
           >
-            <Button danger icon={<DeleteOutlined />} size="small" title={t('common.delete')} />
+            <Button 
+              danger 
+              icon={<DeleteOutlined />} 
+              size="small" 
+              title={t('common.delete')}
+              onClick={(e) => e.stopPropagation()}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -959,12 +1214,6 @@ export const Sales = () => {
       ellipsis: true,
     },
     {
-      title: t('common.id'),
-      dataIndex: 'product_id',
-      key: 'product_id',
-      width: 80,
-    },
-    {
       title: 'Стиль',
       dataIndex: 'style_name',
       key: 'style_name',
@@ -976,13 +1225,14 @@ export const Sales = () => {
       dataIndex: 'quantity',
       key: 'quantity',
       width: 80,
+      render: (quantity: number) => `${quantity} шт`,
     },
     {
-      title: t('sales.unitValue', { defaultValue: 'Единица измерения' }),
+      title: t('sales.unitValue', { defaultValue: 'Количество' }),
       dataIndex: 'unit_value',
       key: 'unit_value',
       width: 100,
-      render: (value: number | undefined) => (value || 1.0).toLocaleString(),
+      render: (unit_value: number) => `${unit_value} м`,
     },
     {
       title: t('sales.unitPrice'),
@@ -1055,7 +1305,7 @@ export const Sales = () => {
             )}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
             onRow={(record) => ({
@@ -1135,7 +1385,7 @@ export const Sales = () => {
             dataSource={overdueSales}
             rowKey="id"
             loading={loadingOverdue}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
             onRow={(record) => ({
@@ -1251,83 +1501,14 @@ export const Sales = () => {
 
                 <Form.Item label={t('sales.items')}>
                   
-                  {saleItems.length > 0 && (
-                    <div style={{ marginBottom: 8 }}>
-                      <Row gutter={8} align="middle">
-                        <Col flex="auto">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            {t('common.product')}
-                          </Text>
-                        </Col>
-                        <Col flex="120px">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            {t('sales.style')}
-                          </Text>
-                        </Col>
-                        <Col flex="80px">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            {t('common.quantity')}
-                          </Text>
-                        </Col>
-                        <Col flex="80px">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            {t('sales.unitValue', { defaultValue: 'Единица измерения' })}
-                          </Text>
-                        </Col>
-                        <Col flex="120px">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            {t('sales.unitPrice')}
-                          </Text>
-                        </Col>
-                        <Col flex="120px">
-                          <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                            Сумма
-                          </Text>
-                        </Col>
-                        <Col flex="40px">
-                        </Col>
-                      </Row>
-                    </div>
-                  )}
-                  
+                                    
                   {getGroupedSaleItems().map((group) => (
                     <Card
                       key={group.productId}
                       size="small"
                       style={{ marginBottom: 16 }}
-                      title={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <span style={{ fontWeight: 'bold', display: 'block' }}>
-                              {group.product?.name || `Product #${group.productId}`}
-                            </span>
-                            {group.product && (
-                              <span style={{ 
-                                fontSize: '11px', 
-                                color: group.product.stock_quantity <= 10 ? '#ff4d4f' : group.product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
-                                fontWeight: group.product.stock_quantity <= 10 ? 'bold' : 'normal'
-                              }}>
-                                Stock: {group.product.stock_quantity}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '12px', color: '#666' }}>
-                              Итого: {group.totalMeters.toFixed(2)} м × {group.product?.selling_price || 0} = {group.totalPrice.toLocaleString()} TJS
-                            </div>
-                          </div>
-                        </div>
-                      }
                     >
-                      {/* Список строк товара */}
-                      <div style={{ marginBottom: 12 }}>
-                        <Text strong style={{ fontSize: '12px', color: '#666' }}>
-                          Строки: {group.items.map((item) => 
-                            `${item.quantity}×${(item.unit_value || 1.0).toFixed(1)}`
-                          ).join(', ')}
-                        </Text>
-                      </div>
-                      
+                                            
                       {/* Поля редактирования для каждой строки */}
                       {group.items.map((item, itemIndex) => {
                         const globalIndex = saleItems.indexOf(item);
@@ -1373,32 +1554,54 @@ export const Sales = () => {
                               </Row>
                             )}
                             
-                            {/* Вторая строка - остальные поля */}
-                            <Row gutter={8} align="middle">
-                              {(() => {
-                                const selectedProduct = products.find(p => p.id === item.product_id);
-                                if (selectedProduct?.type !== 'batch') return null;
-                                const stockItems = productStockItems[item.product_id] || [];
-                                return (
-                                  <Col flex="180px">
-                                  <Form.Item style={{ marginBottom: 0 }}>
-                                    <Select
-                                      placeholder={t('sales.batch')}
-                                      value={item.stock_item_id}
-                                      onChange={(value) => updateSaleItem(globalIndex, 'stock_item_id', value)}
-                                      loading={loadingStockItems[item.product_id]}
-                                      allowClear
-                                    >
-                                        {stockItems.map(si => (
+                            {/* Выбор партии и цена для всего продукта */}
+                            {isFirstItem && (
+                              <Row gutter={8} style={{ marginBottom: 8 }}>
+                                {group.product?.type === 'batch' && (
+                                  <Col flex="1">
+                                    <Form.Item style={{ marginBottom: 0 }}>
+                                      <Select
+                                        placeholder={t('sales.batch')}
+                                        value={group.stock_item_id}
+                                        onChange={(value) => updateProductGroupBatch(group.productId, value)}
+                                        loading={loadingStockItems[group.productId]}
+                                        allowClear
+                                        style={{ width: '100%' }}
+                                      >
+                                        {(productStockItems[group.productId] || []).map(si => (
                                           <Option key={si.id} value={si.id}>
                                             {si.batch_code} ({t('sales.remaining')} {si.quantity}) - {si.selling_price ? si.selling_price.toLocaleString() : '0'} TJS
                                           </Option>
                                         ))}
-                                    </Select>
+                                      </Select>
+                                    </Form.Item>
+                                  </Col>
+                                )}
+                                <Col flex="1">
+                                  <Form.Item style={{ marginBottom: 0 }}>
+                                    <InputNumber
+                                      placeholder={t('common.price')}
+                                      min={0}
+                                      step={0.01}
+                                      value={group.items[0]?.unit_price || group.product?.selling_price || undefined}
+                                      onChange={(value) => {
+                                        // Update price for all items in this group
+                                        setSaleItems(prev => prev.map(item => {
+                                          if (item.product_id === group.productId) {
+                                            return { ...item, unit_price: value || 0 };
+                                          }
+                                          return item;
+                                        }));
+                                      }}
+                                      style={{ width: '100%' }}
+                                    />
                                   </Form.Item>
                                 </Col>
-                                );
-                              })()}
+                              </Row>
+                            )}
+                            
+                            {/* Вторая строка - остальные поля */}
+                            <Row gutter={8} align="middle">
                               <Col flex="120px">
                                 <Form.Item style={{ marginBottom: 0 }}>
                                   <Select
@@ -1421,10 +1624,10 @@ export const Sales = () => {
                                   style={{ marginBottom: 0 }}
                                 >
                                   <InputNumber
-                                    placeholder={t('sales.quantityPlaceholder', { defaultValue: 'Кол-во' })}
+                                    placeholder="Штук"
                                     min={1}
-                                    value={item.quantity}
-                                    onChange={(value) => updateSaleItem(globalIndex, 'quantity', value || 1)}
+                                    value={item.quantity || undefined}
+                                    onChange={(value) => updateSaleItem(globalIndex, 'quantity', value)}
                                     style={{ width: '100%' }}
                                   />
                                 </Form.Item>
@@ -1434,31 +1637,16 @@ export const Sales = () => {
                                   style={{ marginBottom: 0 }}
                                 >
                                   <InputNumber
-                                    placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'E din. izmer.' })}
+                                    placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'Количество' })}
                                     min={0.1}
                                     step={0.1}
-                                    value={item.unit_value || 1.0}
-                                    onChange={(value) => updateSaleItem(globalIndex, 'unit_value', value || 1.0)}
+                                    value={item.unit_value || undefined}
+                                    onChange={(value) => updateSaleItem(globalIndex, 'unit_value', value)}
                                     style={{ width: '100%' }}
                                   />
                                 </Form.Item>
                               </Col>
-                              <Col flex="120px">
-                                <Form.Item
-                                  required
-                                  style={{ marginBottom: 0 }}
-                                >
-                                  <InputNumber
-                                    placeholder={t('common.price')}
-                                    min={0}
-                                    step={0.01}
-                                    value={item.unit_price || undefined}
-                                    onChange={(value) => updateSaleItem(globalIndex, 'unit_price', value || 0)}
-                                    style={{ width: '100%' }}
-                                  />
-                                </Form.Item>
-                              </Col>
-                              <Col flex="120px">
+                                                            <Col flex="120px">
                                 <Form.Item
                                   style={{ marginBottom: 0 }}
                                 >
@@ -1490,10 +1678,10 @@ export const Sales = () => {
                         onClick={() => {
                           const newItem: CreateSaleItemLocal = {
                             product_id: group.productId,
-                            quantity: 1,
-                            unit_price: group.product?.selling_price || 0,
-                            unit_value: 1.0,
-                            stock_item_id: undefined,
+                            quantity: 0,
+                            unit_price: group.items[0]?.unit_price || group.product?.selling_price || 0,
+                            unit_value: 0,
+                            stock_item_id: group.stock_item_id,
                             style_id: undefined,
                           };
                           setSaleItems([...saleItems, newItem]);
@@ -1502,6 +1690,22 @@ export const Sales = () => {
                       >
                         + {t('sales.addRowForProduct')}
                       </Button>
+                      
+                      {/* Детальная информация об итогах */}
+                      {group.items.length > 0 && (
+                        <div style={{ 
+                          marginTop: 12, 
+                          padding: '8px 12px', 
+                          backgroundColor: '#f8f9fa', 
+                          borderRadius: '4px',
+                          border: '1px solid #e9ecef',
+                          fontSize: '12px', 
+                          fontWeight: 'bold', 
+                          color: '#333'
+                        }}>
+                          Итог: {group.items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0)}м × {group.items[0]?.unit_price || 0} = {group.totalPrice.toLocaleString()} TJS
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </Form.Item>
@@ -1551,7 +1755,7 @@ export const Sales = () => {
       />
 
       <Modal
-        title={`${t('sales.sale')} #${selectedSale?.id} - ${t('common.details')}`}
+        title={false}
         open={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={null}
@@ -1574,6 +1778,13 @@ export const Sales = () => {
                 <Tag color="orange" icon={<DollarOutlined />}>
                   {t('common.total')}: {(parseFloat(selectedSale.total_amount) || 0).toLocaleString()}
                 </Tag>
+              </Col>
+              <Col span={6}>
+                {(parseFloat(selectedSale.discount) || 0) > 0 && (
+                  <Tag color="red" icon={<DollarOutlined />}>
+                    {t('sales.discount', { defaultValue: 'Скидка' })}: {(parseFloat(selectedSale.discount) || 0).toLocaleString()}
+                  </Tag>
+                )}
               </Col>
               <Col span={6}>
                 <Tag color={selectedSale.payment_status === 'PAID' ? 'green' : selectedSale.payment_status === 'PARTIAL' ? 'blue' : 'orange'}>
@@ -1743,6 +1954,7 @@ export const Sales = () => {
           setEditModalVisible(false);
           setEditingSale(null);
           setEditSaleItems([]);
+          setEditProductGroups([]);
           form.resetFields();
         }}
         footer={[
@@ -1750,6 +1962,7 @@ export const Sales = () => {
             setEditModalVisible(false);
             setEditingSale(null);
             setEditSaleItems([]);
+            setEditProductGroups([]);
             form.resetFields();
           }}>
             Отмена
@@ -1861,132 +2074,251 @@ export const Sales = () => {
 
             <div style={{ marginBottom: 16 }}>
               <Title level={5}>{t('sales.items')}</Title>
-              {editSaleItems.map((item, index) => (
-                <Row key={index} gutter={[8, 8]} style={{ marginBottom: 8 }} align="middle">
-                  <Col flex="auto">
-                    <Select
-                      placeholder={t('sales.selectProduct', { defaultValue: 'Choose product' })}
-                      value={item.product_id || undefined}
-                      onChange={(value) => {
-                        const newItems = [...editSaleItems];
-                        const selected = products.find(p => p.id === value);
-                        newItems[index] = {
-                          ...newItems[index],
-                          product_id: value,
-                          stock_item_id: selected?.type === 'batch' ? undefined : newItems[index].stock_item_id,
-                          unit_price: selected?.selling_price || newItems[index].unit_price,
-                        };
-                        setEditSaleItems(newItems);
-                        if (selected?.type === 'batch') {
-                          fetchProductStockItems(value);
-                        }
-                      }}
-                      style={{ width: '100%' }}
-                    >
-                      {products.map(product => (
-                        <Option key={product.id} value={product.id}>
-                          {product.name} (Остаток: {product.stock_quantity})
-                        </Option>
-                      ))}
-                    </Select>
-                  </Col>
-                  {(() => {
-                    const selectedProduct = products.find(p => p.id === item.product_id);
-                    if (selectedProduct?.type !== 'batch') return null;
-                    const stockItems = productStockItems[item.product_id] || [];
+              
+              {editSaleItems.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <Row gutter={8} align="middle">
+                    <Col flex="auto">
+                      <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                        {t('common.product')}
+                      </Text>
+                    </Col>
+                    <Col flex="80px">
+                      <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                        {t('common.quantity')}
+                      </Text>
+                    </Col>
+                    <Col flex="80px">
+                      <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                        {t('sales.unitValue', { defaultValue: 'Количество' })}
+                      </Text>
+                    </Col>
+                    <Col flex="120px">
+                      <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                        {t('sales.unitPrice')}
+                      </Text>
+                    </Col>
+                    <Col flex="120px">
+                      <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                        Сумма
+                      </Text>
+                    </Col>
+                    <Col flex="40px">
+                    </Col>
+                  </Row>
+                </div>
+              )}
+              
+              {getGroupedEditSaleItems().map((group) => (
+                <Card
+                  key={group.productId}
+                  size="small"
+                  style={{ marginBottom: 16 }}
+                  title={
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontWeight: 'bold', display: 'block' }}>
+                          {group.product?.name || (group.productId > 0 ? `Product #${group.productId}` : '')}
+                        </span>
+                        {group.product && (
+                          <span style={{ 
+                            fontSize: '11px', 
+                            color: group.product.stock_quantity <= 10 ? '#ff4d4f' : group.product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
+                            fontWeight: group.product.stock_quantity <= 10 ? 'bold' : 'normal'
+                          }}>
+                            Stock: {group.product.stock_quantity}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '12px', color: '#666' }}>
+                          Итого: {group.totalMeters.toFixed(2)} м × {group.product?.selling_price || 0} = {group.totalPrice.toLocaleString()} TJS
+                        </div>
+                      </div>
+                    </div>
+                  }
+                >
+                  {/* Список строк товара */}
+                  <div style={{ marginBottom: 12 }}>
+                    <Text strong style={{ fontSize: '12px', color: '#666' }}>
+                      Строки: {group.items.map((item) => 
+                        `${item.quantity}×${(Number(item.unit_value) || 1.0).toFixed(1)}`
+                      ).join(', ')}
+                    </Text>
+                  </div>
+                  
+                  {/* Поля редактирования для каждой строки */}
+                  {group.items.map((item, itemIndex) => {
+                    const globalIndex = editSaleItems.indexOf(item);
+                    const isFirstItem = itemIndex === 0;
                     return (
-                      <Col flex="180px">
-                        <Select
-                          placeholder={t('sales.batch')}
-                          value={item.stock_item_id}
-                          onChange={(value) => {
-                            const newItems = [...editSaleItems];
-                            newItems[index] = { ...newItems[index], stock_item_id: value };
-                            
-                            // Auto-populate unit_price from selected batch selling_price
-                            if (value) {
-                              const stockItems = productStockItems[item.product_id] || [];
-                              const selectedBatch = stockItems.find(si => si.id === value);
-                              if (selectedBatch?.selling_price) {
-                                newItems[index].unit_price = selectedBatch.selling_price;
-                              }
-                            }
-                            
-                            setEditSaleItems(newItems);
-                          }}
-                          loading={loadingStockItems[item.product_id]}
-                          allowClear
-                          style={{ width: '100%' }}
-                        >
-                          {stockItems.map(si => (
-                            <Option key={si.id} value={si.id}>
-                              {si.batch_code} ({t('sales.remaining')} {si.quantity}) - {si.selling_price ? si.selling_price.toLocaleString() : '0'} TJS
-                            </Option>
-                          ))}
-                        </Select>
-                      </Col>
+                      <div key={globalIndex} style={{ marginBottom: 8 }}>
+                        {/* Первая строка - выбор товара (только для первой строки) */}
+                        {isFirstItem && (
+                          <Row style={{ marginBottom: 8 }}>
+                            <Col span={24}>
+                              <Form.Item
+                                required
+                                style={{ marginBottom: 0 }}
+                              >
+                                <Select
+                                  placeholder={t('sales.selectProduct', { defaultValue: 'Choose product' })}
+                                  value={item.product_id || undefined}
+                                  onChange={(value) => updateEditSaleItem(globalIndex, 'product_id', value)}
+                                  showSearch
+                                  filterOption={(input, option) => {
+                                    const productId = option?.value as number;
+                                    const product = products.find(p => p.id === productId);
+                                    return product?.name.toLowerCase().includes(input.toLowerCase()) || false;
+                                  }}
+                                >
+                                  {products.map(product => (
+                                    <Option key={product.id} value={product.id}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span>{product.name}</span>
+                                        <span style={{ 
+                                          color: product.stock_quantity <= 10 ? '#ff4d4f' : product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
+                                          fontWeight: product.stock_quantity <= 10 ? 'bold' : 'normal',
+                                          fontSize: '12px'
+                                        }}>
+                                          Stock: {product.stock_quantity}
+                                        </span>
+                                      </div>
+                                    </Option>
+                                  ))}
+                                </Select>
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                        )}
+                        
+                        {/* Выбор партии для batch товаров - после выбора товара */}
+                        {isFirstItem && group.product?.type === 'batch' && (
+                          <Row style={{ marginBottom: 8 }}>
+                            <Col span={24}>
+                              <Form.Item style={{ marginBottom: 0 }}>
+                                <Select
+                                  placeholder={t('sales.batch')}
+                                  value={group.stock_item_id}
+                                  onChange={(value) => updateEditProductGroupBatch(group.productId, value)}
+                                  loading={loadingStockItems[group.productId]}
+                                  allowClear
+                                  style={{ width: '100%' }}
+                                >
+                                  {(productStockItems[group.productId] || []).map(si => (
+                                    <Option key={si.id} value={si.id}>
+                                      {si.batch_code} ({t('sales.remaining')} {si.quantity}) - {si.selling_price ? si.selling_price.toLocaleString() : '0'} TJS
+                                    </Option>
+                                  ))}
+                                </Select>
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                        )}
+                        
+                        {/* Вторая строка - остальные поля */}
+                        <Row gutter={8} align="middle">
+                          <Col flex="80px">
+                            <InputNumber
+                              placeholder={t('sales.quantityPlaceholder', { defaultValue: 'Штук' })}
+                              min={1}
+                              value={item.quantity}
+                              onChange={(value) => updateEditSaleItem(globalIndex, 'quantity', value || 1)}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col flex="80px">
+                            <InputNumber
+                              placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'Количество' })}
+                              min={0.1}
+                              step={0.1}
+                              value={item.unit_value || 1.0}
+                              onChange={(value) => updateEditSaleItem(globalIndex, 'unit_value', value || 1.0)}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col flex="120px">
+                            <InputNumber
+                              placeholder={t('common.price')}
+                              min={0.01}
+                              step={0.01}
+                              value={item.unit_price}
+                              onChange={(value) => updateEditSaleItem(globalIndex, 'unit_price', value || 0)}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col flex="120px">
+                            <InputNumber
+                              placeholder="Сумма"
+                              value={item.quantity * item.unit_price * (item.unit_value || 1.0)}
+                              disabled
+                              style={{ width: '100%', backgroundColor: '#f5f5f5' }}
+                            />
+                          </Col>
+                          <Col flex="40px">
+                            <Button
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => {
+                                setEditSaleItems(editSaleItems.filter((_, i) => i !== globalIndex));
+                              }}
+                            />
+                          </Col>
+                        </Row>
+                      </div>
                     );
-                  })()}
-                  <Col flex="80px">
-                    <InputNumber
-                      placeholder={t('sales.quantityPlaceholder', { defaultValue: 'Кол-во' })}
-                      min={1}
-                      value={item.quantity}
-                      onChange={(value) => {
-                        const newItems = [...editSaleItems];
-                        newItems[index] = { ...newItems[index], quantity: value || 1 };
-                        setEditSaleItems(newItems);
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col flex="100px">
-                    <InputNumber
-                      placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'E din. izmer.' })}
-                      min={0.1}
-                      step={0.1}
-                      value={item.unit_value || 1.0}
-                      onChange={(value) => {
-                        const newItems = [...editSaleItems];
-                        newItems[index] = { ...newItems[index], unit_value: value || 1.0 };
-                        setEditSaleItems(newItems);
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col flex="120px">
-                    <InputNumber
-                      placeholder={t('common.price')}
-                      min={0.01}
-                      step={0.01}
-                      value={item.unit_price}
-                      onChange={(value) => {
-                        const newItems = [...editSaleItems];
-                        newItems[index] = { ...newItems[index], unit_price: value || 0 };
-                        setEditSaleItems(newItems);
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col flex="120px">
-                    <InputNumber
-                      placeholder="Сумма"
-                      value={item.quantity * item.unit_price * (item.unit_value || 1.0)}
-                      disabled
-                      style={{ width: '100%', backgroundColor: '#f5f5f5' }}
-                    />
-                  </Col>
-                  <Col flex="40px">
-                    <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => {
-                        setEditSaleItems(editSaleItems.filter((_, i) => i !== index));
-                      }}
-                    />
-                  </Col>
-                </Row>
+                  })}
+                  
+                  {/* Кнопка добавления строки для этого товара */}
+                  <Button
+                    type="dashed"
+                    size="small"
+                    onClick={() => {
+                      const newItem: UpdateSaleItem = {
+                        product_id: group.productId,
+                        quantity: 1,
+                        unit_price: group.product?.selling_price || 0,
+                        unit_value: 1.0,
+                        stock_item_id: group.stock_item_id,
+                      };
+                      setEditSaleItems([...editSaleItems, newItem]);
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    + {t('sales.addRowForProduct')}
+                  </Button>
+                  
+                  {/* Детальная информация об итогах */}
+                  {group.items.length > 0 && (
+                    <div style={{ 
+                      marginTop: 12, 
+                      padding: '8px 12px', 
+                      backgroundColor: '#f8f9fa', 
+                      borderRadius: '4px',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
+                        {group.items.map((item, index) => (
+                          <div key={index}>
+                            {item.quantity}шт × {item.unit_price} × {(Number(item.unit_value) || 1.0).toFixed(1)}м = {(item.quantity * item.unit_price * (Number(item.unit_value) || 1.0)).toFixed(1)} TJS
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        fontWeight: 'bold', 
+                        color: '#333',
+                        borderTop: '1px solid #dee2e6',
+                        paddingTop: '4px',
+                        marginTop: '4px'
+                      }}>
+                        Итог: ({group.items.reduce((sum, item) => sum + (item.quantity * (Number(item.unit_value) || 1.0)), 0).toFixed(1)}м) × {group.product?.selling_price || 0} = {group.totalPrice.toLocaleString()} TJS
+                      </div>
+                    </div>
+                  )}
+                </Card>
               ))}
+              
               <Button
                 type="dashed"
                 onClick={() => {
@@ -2067,7 +2399,7 @@ export const Sales = () => {
                               fontSize: '16px',
                               marginBottom: 2
                             }}>
-                              {item.quantity}{item.unit_value ? `×${item.unit_value}` : ''} {item.style_name ? `(${item.style_name})` : ''} × {item.unit_price.toLocaleString()} = {(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()}
+                              {parseFloat(item.quantity.toString()).toString()}{item.unit_value ? `×${parseFloat(item.unit_value.toString()).toString()}м` : ''} {item.style_name ? `(${item.style_name})` : ''} × {parseFloat(item.unit_price.toString()).toString()} смн = {(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()} смн
                             </div>
                           ))}
                         </div>
@@ -2090,6 +2422,19 @@ export const Sales = () => {
                 }}>
                   {t('common.totalAmount', { defaultValue: 'Total Amount' })}: {selectedReceiptSale.total_amount.toLocaleString()}
                 </div>
+
+                {/* Discount Display */}
+                {(parseFloat(selectedReceiptSale.discount) || 0) > 0 && (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    marginTop: 10, 
+                    fontSize: '18px', 
+                    fontWeight: 500, 
+                    color: '#ff4d4f' 
+                  }}>
+                    {t('sales.discount', { defaultValue: 'Скидка' })}: {parseFloat(selectedReceiptSale.discount).toLocaleString()}
+                  </div>
+                )}
               </>
             )}
           </div>

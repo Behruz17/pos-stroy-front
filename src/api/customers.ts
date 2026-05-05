@@ -5,6 +5,7 @@ export interface Customer {
   full_name: string;
   phone: string;
   balance: number;
+  is_default?: boolean;
   created_at: string;
   updated_at: string;
 }

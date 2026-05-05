@@ -24,6 +24,7 @@ export interface Sale {
   total_amount: string;
   cash_amount: string;
   electronic_amount: string;
+  discount: string;
   payment_status: 'PAID' | 'DEBT' | 'PARTIAL';
   stage: SaleStage;
   debt_deadline?: string;
@@ -70,6 +71,7 @@ export interface OverdueSale {
   customer_id: number;
   customer_name: string;
   total_amount: number;
+  discount: number;
   payment_status: 'DEBT';
   debt_deadline: string;
   created_at: string;

@@ -6,17 +6,21 @@ export interface ReturnItem {
   product_id: number;
   product_name: string;
   product_code: string;
+  product_type: 'simple' | 'batch';
   quantity: number;
+  unit_value: number;
   unit_price: number;
   total_price: number;
+  stock_item_id?: number;
+  batch_alias?: number;
+  batch_code?: string;
 }
 
 export interface Return {
   id: number;
   customer_id: number;
   customer_name: string;
-  total_amount: number;
-  created_by: number;
+  total_amount: string;
   created_at: string;
   items?: ReturnItem[];
 }
@@ -25,6 +29,8 @@ export interface CreateReturnItem {
   product_id: number;
   quantity: number;
   unit_price: number;
+  unit_value?: number;
+  stock_item_id?: number;
 }
 
 export interface CreateReturnRequest {

@@ -3,15 +3,23 @@ import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, DollarOutlined, CalendarOutlined, UserOutlined, RotateLeftOutlined } from '@ant-design/icons';
-import { returnsApi, customersApi, productsApi, type Return, type ReturnItem, type CreateReturnRequest, type Customer, type Product } from '../api';
+import { returnsApi, customersApi, productsApi, stockItemsApi, type Return, type ReturnItem, type CreateReturnRequest, type Customer, type Product, type StockItem } from '../api';
 
 interface CreateReturnItemLocal {
   product_id: number;
   quantity: number;
   unit_price: number;
+  unit_value?: number;
+  stock_item_id?: number;
 }
 
-const { Title } = Typography;
+interface ProductGroup {
+  productId: number;
+  stock_item_id?: number;
+  items: CreateReturnItemLocal[];
+}
+
+const { Title, Text } = Typography;
 const { Option } = Select;
 
 export const Returns = () => {
@@ -29,6 +37,14 @@ export const Returns = () => {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [loadingReturnDetails, setLoadingReturnDetails] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
+  const [productStockItems, setProductStockItems] = useState<Record<number, StockItem[]>>({});
+  const [loadingStockItems, setLoadingStockItems] = useState<Record<number, boolean>>({});
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
+
+  // Calculate total amount for return items
+  const calculateTotalAmount = () => {
+    return returnItems.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+  };
 
   const fetchReturns = async () => {
     setLoading(true);
@@ -59,6 +75,14 @@ export const Returns = () => {
     try {
       const data = await customersApi.getAll();
       setCustomers(data);
+      
+      // Автоматически выбираем клиента "Розница"
+      const defaultCustomer = data.find(customer => 
+        customer.full_name.toLowerCase().includes('розница')
+      );
+      if (defaultCustomer) {
+        form.setFieldValue('customer_id', defaultCustomer.id);
+      }
     } catch (error: unknown) {
       message.error(t('customers.errorLoading', { defaultValue: 'Ошибка при загрузке клиентов' }));
     }
@@ -70,6 +94,21 @@ export const Returns = () => {
       setProducts(data);
     } catch (error: unknown) {
       message.error(t('products.errorLoading'));
+    }
+  };
+
+  const fetchProductStockItems = async (productId: number) => {
+    if (productStockItems[productId]) return; // already cached
+    setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
+    try {
+      const product = products.find(p => p.id === productId);
+      const actualProductId = product?.id || productId;
+      const response = await stockItemsApi.getByProductId(actualProductId);
+      setProductStockItems(prev => ({ ...prev, [productId]: response.batches || [] }));
+    } catch (error) {
+      console.error(`Failed to load stock items for product ${productId}:`, error);
+    } finally {
+      setLoadingStockItems(prev => ({ ...prev, [productId]: false }));
     }
   };
 
@@ -145,6 +184,12 @@ export const Returns = () => {
           setCreating(false);
           return;
         }
+        const selectedProduct = products.find(p => p.id === item.product_id);
+        if (selectedProduct?.type === 'batch' && !item.stock_item_id) {
+          message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+          setCreating(false);
+          return;
+        }
       }
 
       const createData: CreateReturnRequest = {
@@ -180,7 +225,9 @@ export const Returns = () => {
     const newItem: CreateReturnItemLocal = {
       product_id: 0,
       quantity: 1,
-      unit_price: 1,
+      unit_price: 0,
+      unit_value: 1.0,
+      stock_item_id: undefined,
     };
     setReturnItems([...returnItems, newItem]);
   };
@@ -188,7 +235,89 @@ export const Returns = () => {
   const updateReturnItem = (index: number, field: keyof CreateReturnItemLocal, value: any) => {
     const updatedItems = [...returnItems];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
+    
+    // Auto-populate unit_price from product selling_price when product changes
+    if (field === 'product_id') {
+      const selected = products.find(p => p.id === value);
+      if (selected?.selling_price) {
+        updatedItems[index].unit_price = selected.selling_price;
+      }
+      // Reset stock_item_id if product changes and is not batch
+      if (selected?.type !== 'batch') {
+        updatedItems[index].stock_item_id = undefined;
+        // Remove group batch if product is not batch
+        setProductGroups(prev => prev.filter(g => g.productId !== value));
+      } else {
+        fetchProductStockItems(value);
+        // Create or update group for batch product
+        setProductGroups(prev => {
+          const existing = prev.find(g => g.productId === value);
+          if (existing) {
+            return prev.map(g => g.productId === value ? { ...g, productId: value } : g);
+          } else {
+            return [...prev, { productId: value, items: [] }];
+          }
+        });
+      }
+    }
+    
     setReturnItems(updatedItems);
+  };
+
+  // Group return items by product for UI display
+  const getGroupedReturnItems = () => {
+    const groups = new Map<number, CreateReturnItemLocal[]>();
+    
+    returnItems.forEach(item => {
+      if (!groups.has(item.product_id)) {
+        groups.set(item.product_id, []);
+      }
+      groups.get(item.product_id)!.push(item);
+    });
+    
+    return Array.from(groups.entries()).map(([productId, items]) => {
+      const product = products.find(p => p.id === Number(productId));
+      const totalMeters = items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0);
+      const totalPrice = items.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+      const group = productGroups.find(g => g.productId === Number(productId));
+      
+      return {
+        productId: Number(productId),
+        product,
+        items,
+        totalMeters,
+        totalPrice,
+        stock_item_id: group?.stock_item_id
+      };
+    });
+  };
+
+  const updateProductGroupBatch = (productId: number, stockItemId: number | undefined) => {
+    setProductGroups(prev => {
+      const existing = prev.find(g => g.productId === productId);
+      if (existing) {
+        return prev.map(g => g.productId === productId ? { ...g, stock_item_id: stockItemId } : g);
+      } else {
+        return [...prev, { productId, stock_item_id: stockItemId, items: [] }];
+      }
+    });
+
+    // Update all items of this product with the new batch
+    setReturnItems(prev => prev.map(item => {
+      if (item.product_id === productId) {
+        const updatedItem = { ...item, stock_item_id: stockItemId };
+        // Auto-populate unit_price from selected batch selling_price
+        if (stockItemId) {
+          const stockItems = productStockItems[productId] || [];
+          const selectedBatch = stockItems.find(si => si.id === stockItemId);
+          if (selectedBatch?.selling_price) {
+            updatedItem.unit_price = selectedBatch.selling_price;
+          }
+        }
+        return updatedItem;
+      }
+      return item;
+    }));
   };
 
   const removeReturnItem = (index: number) => {
@@ -218,10 +347,10 @@ export const Returns = () => {
       title: t('common.totalAmount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => (
+      render: (amount: string) => (
         <span style={{ color: '#52c41a' }}>
           <DollarOutlined style={{ marginRight: 4 }} />
-          {amount.toLocaleString()}
+          {parseFloat(amount).toLocaleString()}
         </span>
       ),
     },
@@ -274,6 +403,13 @@ export const Returns = () => {
       width: 80,
     },
     {
+      title: t('sales.unitValue'),
+      dataIndex: 'unit_value',
+      key: 'unit_value',
+      width: 80,
+      render: (value: number) => value?.toLocaleString() || '1',
+    },
+    {
       title: t('common.unitPrice'),
       dataIndex: 'unit_price',
       key: 'unit_price',
@@ -284,9 +420,21 @@ export const Returns = () => {
       title: t('common.amount'),
       key: 'total',
       render: (_, record: ReturnItem) => (
-        <strong>{(record.quantity * record.unit_price).toLocaleString()}</strong>
+        <strong>{(record.quantity * record.unit_price * (record.unit_value || 1.0)).toLocaleString()}</strong>
       ),
       width: 100,
+    },
+    {
+      title: t('sales.batch'),
+      key: 'batch',
+      width: 120,
+      render: (_, record: ReturnItem) => (
+        record.product_type === 'batch' && record.batch_code ? (
+          <Tag color="blue">{record.batch_code}</Tag>
+        ) : (
+          <span>-</span>
+        )
+      ),
     },
   ];
 
@@ -380,7 +528,7 @@ export const Returns = () => {
                   </Select>
                 </Form.Item>
 
-                <Form.Item label={t('returns.items')}>
+                <Form.Item label="Товары">
                   <div style={{ marginBottom: 16 }}>
                     <Button
                       type="dashed"
@@ -388,90 +536,205 @@ export const Returns = () => {
                       icon={<PlusOutlined />}
                       block
                     >
-                      {t('returns.addItem')}
+                      {t('returns.addItem', { defaultValue: 'Добавить позицию' })}
                     </Button>
                   </div>
                   
-                  {returnItems.map((item, index) => (
+                  {getGroupedReturnItems().map((group) => (
                     <Card
-                      key={index}
+                      key={group.productId}
                       size="small"
                       style={{ marginBottom: 16 }}
-                      title={`Позиция ${index + 1}`}
-                      extra={
-                        <Button
-                          type="text"
-                          danger
-                          icon={<DeleteOutlined />}
-                          onClick={() => removeReturnItem(index)}
-                        />
-                      }
-                    >
-                      <Row gutter={16}>
-                        <Col xs={24} sm={12}>
-                          <Form.Item
-                            label={t('common.product')}
-                            required
-                          >
-                            <Select
-                              placeholder={t('products.selectProduct')}
-                              value={item.product_id || undefined}
-                              onChange={(value) => updateReturnItem(index, 'product_id', value)}
-                              showSearch
-                              filterOption={(input, option) =>
-                                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+                      title={
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <Select
+                            placeholder="Выберите товар"
+                            value={group.productId || undefined}
+                            onChange={(value) => {
+                              // Update all items in this group to the new product
+                              const updatedItems = returnItems.map(item => {
+                                if (getGroupedReturnItems().find(g => g.productId === group.productId)?.items.includes(item)) {
+                                  const selected = products.find(p => p.id === value);
+                                  return {
+                                    ...item,
+                                    product_id: value,
+                                    unit_price: selected?.selling_price || item.unit_price,
+                                    stock_item_id: selected?.type === 'batch' ? item.stock_item_id : undefined
+                                  };
+                                }
+                                return item;
+                              });
+                              setReturnItems(updatedItems);
+                              
+                              // Fetch stock items for batch products
+                              const selectedProduct = products.find(p => p.id === value);
+                              if (selectedProduct?.type === 'batch') {
+                                fetchProductStockItems(value);
                               }
-                            >
-                              {products.map(product => (
-                                <Option key={product.id} value={product.id}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>{product.name}</span>
-                                    <span style={{ 
-                                      color: product.stock_quantity <= 10 ? '#ff4d4f' : product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
-                                      fontWeight: product.stock_quantity <= 10 ? 'bold' : 'normal',
-                                      fontSize: '12px'
-                                    }}>
-                                      {t('sales.inStock')} {product.stock_quantity}
-                                    </span>
-                                  </div>
-                                </Option>
-                              ))}
-                            </Select>
-                          </Form.Item>
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Form.Item
-                            label={t('common.quantity')}
-                            required
+                            }}
+                            showSearch
+                            filterOption={(input, option) => {
+                              const product = products.find(p => p.id === option?.value);
+                              return product?.name.toLowerCase().includes(input.toLowerCase()) ?? false;
+                            }}
+                            style={{ width: '100%' }}
                           >
+                            {products.map(product => (
+                              <Option key={product.id} value={product.id}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span>{product.name}</span>
+                                  <span style={{ 
+                                    color: '#52c41a',
+                                    fontSize: '12px'
+                                  }}>
+                                    Цена: {product.selling_price?.toLocaleString() || 0}
+                                  </span>
+                                </div>
+                              </Option>
+                            ))}
+                          </Select>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {group.product?.type === 'batch' && (
+                              <Select
+                                placeholder="Выберите партию"
+                                value={group.stock_item_id || undefined}
+                                onChange={(value) => updateProductGroupBatch(group.productId, value)}
+                                loading={loadingStockItems[group.productId]}
+                                style={{ flex: 1 }}
+                              >
+                                {(productStockItems[group.productId] || []).map(stockItem => (
+                                  <Option key={stockItem.id} value={stockItem.id}>
+                                    {stockItem.batch_code}
+                                  </Option>
+                                ))}
+                              </Select>
+                            )}
                             <InputNumber
-                              placeholder={t('sales.quantityPlaceholder')}
-                              min={1}
-                              value={item.quantity}
-                              onChange={(value) => updateReturnItem(index, 'quantity', value || 1)}
-                              style={{ width: '100%' }}
-                            />
-                          </Form.Item>
-                        </Col>
-                        <Col xs={12} sm={6}>
-                          <Form.Item
-                            label={t('common.unitPrice')}
-                            required
-                          >
-                            <InputNumber
-                              placeholder={t('common.price')}
+                              placeholder="Цена"
                               min={0}
                               step={0.01}
-                              value={item.unit_price || undefined}
-                              onChange={(value) => updateReturnItem(index, 'unit_price', value || 1)}
+                              value={group.items[0]?.unit_price || 0}
+                              onChange={(value) => {
+                                // Update price for all items in this group
+                                const updatedItems = returnItems.map(item => {
+                                  if (getGroupedReturnItems().find(g => g.productId === group.productId)?.items.includes(item)) {
+                                    return { ...item, unit_price: value || 0 };
+                                  }
+                                  return item;
+                                });
+                                setReturnItems(updatedItems);
+                              }}
+                              style={{ flex: '0 0 120px' }}
+                            />
+                          </div>
+                        </div>
+                      }
+                    >
+                  {group.items.map((item, itemIndex) => {
+                    const globalIndex = returnItems.findIndex(
+                      ri => ri.product_id === item.product_id && 
+                      ri.stock_item_id === item.stock_item_id && 
+                      ri.unit_price === item.unit_price &&
+                      ri.quantity === item.quantity
+                    );
+                    return (
+                      <div key={itemIndex} style={{ marginBottom: 8 }}>
+                        <Row gutter={8} align="middle">
+                          <Col flex="80px">
+                            <InputNumber
+                              placeholder="Штук"
+                              min={1}
+                              value={item.quantity || undefined}
+                              onChange={(value) => updateReturnItem(globalIndex, 'quantity', value || 1)}
                               style={{ width: '100%' }}
                             />
-                          </Form.Item>
-                        </Col>
-                      </Row>
-                    </Card>
-                  ))}
+                          </Col>
+                          <Col flex="80px">
+                            <InputNumber
+                              placeholder="Вес/объем"
+                              min={0.01}
+                              step={0.01}
+                              value={item.unit_value || undefined}
+                              onChange={(value) => updateReturnItem(globalIndex, 'unit_value', value || 1.0)}
+                              style={{ width: '100%' }}
+                            />
+                          </Col>
+                          <Col flex="120px">
+                            <InputNumber
+                              placeholder="Сумма"
+                              value={item.quantity * item.unit_price * (item.unit_value || 1.0)}
+                              disabled
+                              style={{ width: '100%', backgroundColor: '#f5f5f5' }}
+                            />
+                          </Col>
+                          <Col flex="40px">
+                            <Button
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined />}
+                              onClick={() => removeReturnItem(globalIndex)}
+                            />
+                          </Col>
+                        </Row>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Кнопка добавления строки для этого товара */}
+                  <Button
+                    type="dashed"
+                    onClick={() => {
+                      const newItem: CreateReturnItemLocal = {
+                        product_id: group.productId,
+                        quantity: 1,
+                        unit_price: group.items[0]?.unit_price || group.product?.selling_price || 0,
+                        unit_value: group.items[0]?.unit_value || 1.0,
+                        stock_item_id: group.stock_item_id,
+                      };
+                      setReturnItems([...returnItems, newItem]);
+                    }}
+                    style={{ width: '100%', marginTop: 8 }}
+                  >
+                    + {t('sales.addRowForProduct', { defaultValue: 'Добавить строку для этого товара' })}
+                  </Button>
+                  
+                  {/* Детальная информация об итогах */}
+                  {group.items.length > 0 && (
+                    <div style={{ 
+                      marginTop: 12, 
+                      padding: '8px 12px', 
+                      backgroundColor: '#f8f9fa', 
+                      borderRadius: '4px',
+                      border: '1px solid #e9ecef',
+                      fontSize: '12px', 
+                      fontWeight: 'bold', 
+                      color: '#333'
+                    }}>
+                      Итог: {group.totalMeters} ед × {group.items[0]?.unit_price || 0} = {group.totalPrice.toLocaleString()} TJS
+                    </div>
+                  )}
+                </Card>
+              ))}
                 </Form.Item>
+
+                {/* Total Amount Display */}
+                {returnItems.length > 0 && (
+                  <Card size="small" style={{ marginBottom: 16, backgroundColor: '#f6ffed' }}>
+                    <Row justify="space-between" align="middle">
+                      <Col>
+                        <Text strong style={{ fontSize: '16px' }}>
+                          <DollarOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+                          {t('common.totalAmount')}:
+                        </Text>
+                      </Col>
+                      <Col>
+                        <Text strong style={{ fontSize: '18px', color: '#52c41a' }}>
+                          {calculateTotalAmount().toLocaleString()}
+                        </Text>
+                      </Col>
+                    </Row>
+                  </Card>
+                )}
 
                 <Form.Item style={{ marginTop: 24 }}>
                   <Button
@@ -482,7 +745,7 @@ export const Returns = () => {
                     block
                     size="large"
                   >
-                    Создать возврат
+                    {t('returns.createReturn', { defaultValue: 'Создать возврат' })}
                   </Button>
                 </Form.Item>
               </Form>
@@ -524,7 +787,7 @@ export const Returns = () => {
               </Col>
               <Col span={6}>
                 <Tag color="orange" icon={<DollarOutlined />}>
-                  Сумма: {selectedReturn.total_amount.toLocaleString()}
+                  Сумма: {parseFloat(selectedReturn.total_amount).toLocaleString()}
                 </Tag>
               </Col>
             </Row>

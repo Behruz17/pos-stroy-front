@@ -88,6 +88,22 @@ export const OverdueSales: React.FC<OverdueSalesProps> = () => {
       ),
     },
     {
+      title: t('sales.discount', { defaultValue: 'Скидка' }),
+      dataIndex: 'discount',
+      key: 'discount',
+      render: (discount: number) => {
+        if (discount > 0) {
+          return (
+            <span style={{ color: '#ff4d4f' }}>
+              <DollarOutlined style={{ marginRight: 4 }} />
+              {discount.toLocaleString()}
+            </span>
+          );
+        }
+        return '-';
+      },
+    },
+    {
       title: t('sales.debtDeadline', { defaultValue: 'Срок долга' }),
       dataIndex: 'debt_deadline',
       key: 'debt_deadline',

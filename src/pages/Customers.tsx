@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber } from 'antd';
+import { Table, Button, Space, Typography, Card, message, Popconfirm, Form, Input, Row, Col, Modal, type TableProps, Select, DatePicker, Tag, Spin, InputNumber, Statistic } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { EditOutlined, DeleteOutlined, PlusOutlined, PhoneOutlined, SearchOutlined, UserOutlined, DollarOutlined, TransactionOutlined } from '@ant-design/icons';
 import { customersApi, customerOperationsApi, salesApi, customerPaymentsApi, accountsApi, type Customer, type CreateCustomerRequest, type CustomerOperation, type CustomerOperationFilters, type Sale, type CustomerPayment, type CreateCustomerPaymentRequest, type Account } from '../api';
@@ -75,6 +75,13 @@ export const Customers = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getTotalDebt = () => {
+    return customers.reduce((total, customer) => {
+      const balance = Number(customer.balance) || 0;
+      return balance > 0 ? total + balance : total;
+    }, 0);
   };
 
   const fetchOperations = async () => {
@@ -493,6 +500,30 @@ export const Customers = () => {
     <div>
       <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>Клиенты</Title>
       
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} md={8}>
+          <Card>
+            <Statistic
+              title="Общая сумма долга"
+              value={getTotalDebt()}
+              valueStyle={{ color: '#ff4d4f' }}
+              prefix={<DollarOutlined />}
+              suffix="TJS"
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <Card>
+            <Statistic
+              title="Количество клиентов"
+              value={customers.length}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<UserOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
+      
       <Card style={{ marginBottom: 16 }}>
         <Row gutter={[16, 16]}>
           <Col>
@@ -767,7 +798,7 @@ export const Customers = () => {
       >
         {selectedOperation && (selectedOperation.type === 'DEBT' || selectedOperation.type === 'PAID' || selectedOperation.type === 'PARTIAL') ? (
           <div>
-            {selectedOperation?.type === 'PARTIAL' && saleDetails && (saleDetails.cash_amount > 0 || saleDetails.electronic_amount > 0) && (
+            {selectedOperation?.type === 'PARTIAL' && saleDetails && ((parseFloat(saleDetails.cash_amount) || 0) > 0 || (parseFloat(saleDetails.electronic_amount) || 0) > 0) && (
               <Row gutter={16} style={{ marginBottom: 16 }}>
                 <Col span={12}>
                   <Card size="small">

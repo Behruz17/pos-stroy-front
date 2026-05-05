@@ -27,6 +27,8 @@ export const Products = () => {
   const [newPrice, setNewPrice] = useState<number | undefined>(undefined);
   const [adjustingStock, setAdjustingStock] = useState(false);
   const [productStockItems, setProductStockItems] = useState<Record<number, StockItem[]>>({});
+  const [batchesModalVisible, setBatchesModalVisible] = useState(false);
+  const [selectedProductForBatches, setSelectedProductForBatches] = useState<Product | null>(null);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -87,6 +89,12 @@ export const Products = () => {
     } catch (error) {
       console.error(`Failed to load stock items for product ${productId}:`, error);
     }
+  };
+
+  const handleShowBatches = async (product: Product) => {
+    setSelectedProductForBatches(product);
+    await fetchProductStockItems(product.id);
+    setBatchesModalVisible(true);
   };
 
   const getCurrentRateForCurrency = (currency: string): number | null => {
@@ -457,6 +465,14 @@ export const Products = () => {
             pagination={{ pageSize: 10 }}
             scroll={{ x: 'max-content' }}
             size="small"
+            onRow={(record) => ({
+              onClick: () => {
+                if (record.type === 'batch') {
+                  handleShowBatches(record);
+                }
+              },
+              style: record.type === 'batch' ? { cursor: 'pointer', backgroundColor: '#f5f5f5' } : {}
+            })}
           />
         </div>
       ),
@@ -786,6 +802,65 @@ export const Products = () => {
                     );
                   })()}
                 </Text>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Batches Modal */}
+      <Modal
+        title={`Партии товара: ${selectedProductForBatches?.name}`}
+        open={batchesModalVisible}
+        onCancel={() => {
+          setBatchesModalVisible(false);
+          setSelectedProductForBatches(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setBatchesModalVisible(false);
+            setSelectedProductForBatches(null);
+          }}>
+            Закрыть
+          </Button>
+        ]}
+        width={400}
+      >
+        {selectedProductForBatches && (
+          <div>
+            {productStockItems[selectedProductForBatches.id]?.length > 0 ? (
+              <Table
+                columns={[
+                  {
+                    title: 'Остаток',
+                    dataIndex: 'quantity',
+                    key: 'quantity',
+                    render: (quantity: number) => (
+                      <span style={{ 
+                        color: quantity <= 10 ? '#ff4d4f' : quantity <= 50 ? '#faad14' : '#52c41a',
+                        fontWeight: quantity <= 10 ? 'bold' : 'normal'
+                      }}>
+                        {quantity}
+                      </span>
+                    ),
+                  },
+                  {
+                    title: 'Цена продажи',
+                    dataIndex: 'selling_price',
+                    key: 'selling_price',
+                    align: 'right',
+                    render: (price: number) => price ? price.toLocaleString() : '-',
+                  },
+                ]}
+                dataSource={productStockItems[selectedProductForBatches.id] || []}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                scroll={{ x: 'max-content' }}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
+                Нет партий для этого товара
               </div>
             )}
           </div>

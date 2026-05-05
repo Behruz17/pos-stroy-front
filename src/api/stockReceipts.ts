@@ -2,27 +2,32 @@ import { apiClient } from './client';
 
 export interface StockReceiptItem {
   id: number;
-  receipt_id: number;
+  stock_receipt_id: number;
   product_id: number;
-  product_name: string;
-  product_code: string;
   quantity: number;
-  purchase_cost: number;
-  selling_price: number;
-  purchase_cost_converted?: number | null;
+  purchase_cost: string;
+  selling_price: string;
+  purchase_cost_converted: string;
+  actual_cost: string;
+  actual_cost_converted: string;
+  tonnage?: string | null;
+  price_per_ton?: string | null;
   batch_code?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StockReceipt {
   id: number;
   created_by: number;
   created_at: string;
-  total_amount: number;
+  total_amount: string;
   supplier_id: number;
   supplier_name: string;
   currency: string;
   rate: string;
-  total_amount_converted?: number | null;
+  total_amount_converted?: string | null;
+  delivery_cost?: string | null;
   items?: StockReceiptItem[];
 }
 
@@ -30,7 +35,10 @@ export interface CreateStockReceiptItem {
   product_id: number;
   quantity: number;
   purchase_cost: number;
+  actual_cost: number;
   selling_price: number;
+  tonnage?: number | null;
+  price_per_ton?: number | null;
   batch_code?: string;
 }
 
@@ -38,6 +46,7 @@ export interface CreateStockReceiptRequest {
   supplier_id: number;
   currency?: string;
   rate?: number;
+  delivery_cost?: number;
   items: CreateStockReceiptItem[];
 }
 

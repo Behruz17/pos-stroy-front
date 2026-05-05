@@ -17,7 +17,8 @@ import {
   Tabs,
   Select,
   DatePicker,
-  Tag
+  Tag,
+  Statistic
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -27,7 +28,8 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   TeamOutlined,
-  AccountBookOutlined
+  AccountBookOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import { 
   debtorsApi, 
@@ -80,6 +82,10 @@ export const Debtors = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getTotalDebt = () => {
+    return debtors.reduce((total, debtor) => total + (Number(debtor.debt_amount) || 0), 0);
   };
 
   const fetchOperations = async () => {
@@ -511,6 +517,31 @@ export const Debtors = () => {
   return (
     <div>
       <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>{t('debtors.title')}</Title>
+      
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} md={8}>
+          <Card>
+            <Statistic
+              title="Общая сумма долга"
+              value={getTotalDebt()}
+              valueStyle={{ color: '#ff4d4f' }}
+              prefix={<DollarOutlined />}
+              suffix="TJS"
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <Card>
+            <Statistic
+              title="Количество должников"
+              value={debtors.length}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<TeamOutlined />}
+            />
+          </Card>
+        </Col>
+      </Row>
+      
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
