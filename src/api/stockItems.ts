@@ -17,6 +17,7 @@ export interface StockItemsByProductResponse {
   product_id: number;
   product_type: 'simple' | 'batch';
   product_name: string;
+  currency: string; // Currency inherited from product
   total_quantity: number;
   batches?: StockItem[];
   message?: string; // for simple products

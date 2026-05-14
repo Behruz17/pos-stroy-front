@@ -26,6 +26,7 @@ export { exchangeRatesApi } from './exchangeRates';
 export { stylesApi } from './styles';
 export { stockAdjustmentsApi } from './stockAdjustments';
 export { employeesApi } from './employees';
+export { userCashflowApi } from './userCashflow';
 
 // Types
 export type { User, LoginRequest, LoginResponse, LogoutResponse, RegisterRequest, RegisterResponse } from './types';
@@ -60,3 +61,7 @@ export type { ExchangeRate, UpdateExchangeRateRequest, UpdateExchangeRateRespons
 export type { Style, CreateStyleRequest, UpdateStyleRequest } from './styles';
 export type { StockAdjustment, CreateStockAdjustment } from './stockAdjustments';
 export type { Employee, CreateEmployeeRequest, UpdateEmployeeRequest, EmployeeWithSalaryHistory, DeleteEmployeeResponse } from './employees';
+export type { 
+  CashflowOperation, CashflowSummary, UserCashflowSummary, CashflowFilters, 
+  UserCashflowResponse, UserCashflowFilters 
+} from './userCashflow';

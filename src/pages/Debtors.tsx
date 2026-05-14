@@ -422,7 +422,7 @@ export const Debtors = () => {
             )}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
           />
@@ -505,7 +505,7 @@ export const Debtors = () => {
             )}
             rowKey="id"
             loading={operationsLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
           />

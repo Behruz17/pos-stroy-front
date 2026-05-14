@@ -1,2541 +1,5327 @@
 import { useEffect, useState } from 'react';
+
 import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Select, InputNumber, Row, Col, type TableProps, Modal, Input, Tag, Spin, DatePicker, Statistic, Collapse } from 'antd';
+
 const { Panel } = Collapse;
+
 import { useTranslation } from 'react-i18next';
+
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, CalendarOutlined, UserOutlined, PrinterOutlined, HistoryOutlined, CheckCircleOutlined, CarOutlined, ShoppingOutlined, CheckCircleFilled } from '@ant-design/icons';
-import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style } from '../api';
+
+import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, usersApi, debtorsApi, debtorOperationsApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style, type UserWithCreated, type Debtor } from '../api';
+
 import dayjs from 'dayjs';
+
 import '../components/Receipt.css';
 
+
+
 interface CreateSaleItemLocal {
+
   product_id: number;
+
   quantity: number;
+
   unit_price: number;
+
   unit_value?: number;
+
   stock_item_id?: number;
+
   style_id?: number;
+
 }
+
+
 
 interface ProductGroup {
+
   productId: number;
+
   stock_item_id?: number;
+
   items: CreateSaleItemLocal[];
+
 }
 
+
+
 const { Title, Text } = Typography;
+
 const { Option } = Select;
 
+
+
 export const Sales = () => {
+
   const { t } = useTranslation();
+
   const [sales, setSales] = useState<Sale[]>([]);
+
   const [loading, setLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState('list');
+
   const [creating, setCreating] = useState(false);
+
   const [searchText, setSearchText] = useState('');
+
   const [form] = Form.useForm();
+
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'DEBT' | 'PARTIAL'>('PAID');
+
   const [customers, setCustomers] = useState<Customer[]>([]);
+
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
+
+  const [debtorSearchText, setDebtorSearchText] = useState('');
+
   const [products, setProducts] = useState<Product[]>([]);
+
   const [styles, setStyles] = useState<Style[]>([]);
+
   const [saleItems, setSaleItems] = useState<CreateSaleItemLocal[]>([]);
+
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+
   const [loadingSaleDetails, setLoadingSaleDetails] = useState(false);
+
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+
   const [selectedReceiptSale, setSelectedReceiptSale] = useState<Sale | null>(null);
+
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
+
   const [stockErrorModal, setStockErrorModal] = useState<{ visible: boolean; productName: string }>({ visible: false, productName: '' });
+
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+
   const [editModalVisible, setEditModalVisible] = useState(false);
+
   const [editing, setEditing] = useState(false);
+
   const [editSaleItems, setEditSaleItems] = useState<UpdateSaleItem[]>([]);
+
   const [overdueSales, setOverdueSales] = useState<OverdueSale[]>([]);
+
   const [loadingOverdue, setLoadingOverdue] = useState(false);
+
   const [selectedOverdueSale, setSelectedOverdueSale] = useState<Sale | null>(null);
+
   const [overdueDetailModalVisible, setOverdueDetailModalVisible] = useState(false);
+
   const [loadingOverdueDetails, setLoadingOverdueDetails] = useState(false);
+
     const [stageHistoryModalVisible, setStageHistoryModalVisible] = useState(false);
+
   const [stageHistory, setStageHistory] = useState<StageHistoryEntry[]>([]);
+
   const [loadingStageHistory, setLoadingStageHistory] = useState(false);
+
   const [selectedSaleForStage, setSelectedSaleForStage] = useState<Sale | null>(null);
+
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+
   const [selectedSaleForPayment, setSelectedSaleForPayment] = useState<Sale | null>(null);
+
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+
   const [addingPayment, setAddingPayment] = useState(false);
+
   const [productStockItems, setProductStockItems] = useState<Record<number, StockItem[]>>({});
+
   const [loadingStockItems, setLoadingStockItems] = useState<Record<number, boolean>>({});
+
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
+
   const [editProductGroups, setEditProductGroups] = useState<ProductGroup[]>([]);
 
+  const [users, setUsers] = useState<UserWithCreated[]>([]);
+
+  const [selectedSellerId, setSelectedSellerId] = useState<number | undefined>(undefined);
+
+  const selectedCustomerId = Form.useWatch('customer_id', form);
+
+  const selectedCustomer = customers.find(customer => customer.id === selectedCustomerId);
+
+  const isRetailCustomer = Boolean(selectedCustomer?.full_name?.toLowerCase().includes('розница'));
+
+  const shouldShowDebtorSelect = (paymentStatus === 'DEBT' || paymentStatus === 'PARTIAL') && isRetailCustomer;
+
+  const newDebtorOptionPrefix = 'new-debtor:';
+
+  const normalizedDebtorSearchText = debtorSearchText.trim().toLowerCase();
+
+  const hasDebtorSearchMatch = normalizedDebtorSearchText
+    ? debtors.some(debtor => debtor.full_name?.trim().toLowerCase() === normalizedDebtorSearchText)
+    : true;
+
+  const debtorOptions = [
+    ...debtors.map(debtor => ({
+      value: debtor.id,
+      label: `${debtor.full_name}${debtor.phone ? ` - ${debtor.phone}` : ''}`,
+    })),
+    ...(debtorSearchText.trim() && !hasDebtorSearchMatch ? [{
+      value: `${newDebtorOptionPrefix}${debtorSearchText.trim()}`,
+      label: `Создать должника: ${debtorSearchText.trim()}`,
+    }] : []),
+  ];
+
+
+
   const fetchSales = async () => {
+
     setLoading(true);
+
     try {
+
       const params: any = {};
+
       
+
       // If date is selected, use only date
+
       if (selectedDate) {
+
         params.date = selectedDate;
+
       }
+
       
-      console.log('Fetching sales with params:', params);
-      const data = await salesApi.getAll(params);
-      setSales(data);
-    } catch (error: unknown) {
-      const axiosError = error as { response?: { status: number } };
-      if (axiosError.response?.status === 401) {
-        message.error(t('errors.unauthorized'));
-      } else {
-        message.error(t('sales.errorLoading'));
+
+      // If seller is selected, add seller_id filter
+
+      if (selectedSellerId) {
+
+        params.seller_id = selectedSellerId;
+
       }
+
+      
+
+      console.log('Fetching sales with params:', params);
+
+      const data = await salesApi.getAll(params);
+
+      setSales(data);
+
+    } catch (error: unknown) {
+
+      const axiosError = error as { response?: { status: number } };
+
+      if (axiosError.response?.status === 401) {
+
+        message.error(t('errors.unauthorized'));
+
+      } else {
+
+        message.error(t('sales.errorLoading'));
+
+      }
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
+
+
 
   const fetchCustomers = async () => {
+
     try {
+
       const data = await customersApi.getAll();
+
       setCustomers(data);
+
       
+
       // Автоматически выбираем клиента "Розница"
+
       const defaultCustomer = data.find(customer => 
+
         customer.full_name.toLowerCase().includes('розница')
+
       );
+
       if (defaultCustomer) {
+
         form.setFieldValue('customer_id', defaultCustomer.id);
+
       }
+
     } catch (error: unknown) {
+
       message.error(t('customers.errorLoading', { defaultValue: 'Ошибка при загрузке клиентов' }));
+
     }
+
   };
+
+
+
+  const fetchDebtors = async () => {
+
+    try {
+
+      const data = await debtorsApi.getAll();
+
+      setDebtors(data);
+
+    } catch (error: unknown) {
+
+      message.error(t('debtors.errorLoading', { defaultValue: 'Ошибка при загрузке должников' }));
+
+    }
+
+  };
+
+
 
   const fetchProducts = async () => {
+
     try {
+
       const data = await productsApi.getAll();
+
       // Show all products (both main and batch items)
+
       setProducts(data);
+
     } catch (error: unknown) {
+
       message.error(t('products.errorLoading'));
+
     }
+
   };
+
+
 
   const fetchStyles = async () => {
+
     try {
+
       const data = await stylesApi.getAll();
+
       setStyles(data);
+
     } catch (error: unknown) {
+
       message.error(t('styles.errorLoading', { defaultValue: 'Ошибка при загрузке стилей' }));
+
     }
+
   };
-  const fetchProductStockItems = async (productId: number) => {
-    if (productStockItems[productId]) return; // already cached
-    setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
+
+
+
+  const fetchUsers = async () => {
+
     try {
-      // Use product_id for API request
-      const product = products.find(p => p.id === productId);
-      const actualProductId = product?.id || productId;
-      const response = await stockItemsApi.getByProductId(actualProductId);
-      setProductStockItems(prev => ({ ...prev, [productId]: response.batches || [] }));
-    } catch (error) {
-      console.error(`Failed to load stock items for product ${productId}:`, error);
-    } finally {
-      setLoadingStockItems(prev => ({ ...prev, [productId]: false }));
+
+      const data = await usersApi.getAll();
+
+      setUsers(data);
+
+    } catch (error: unknown) {
+
+      message.error(t('users.errorLoading', { defaultValue: 'Ошибка при загрузке пользователей' }));
+
     }
+
   };
+
+  const fetchProductStockItems = async (productId: number) => {
+
+    if (productStockItems[productId]) return; // already cached
+
+    setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
+
+    try {
+
+      // Use product_id for API request
+
+      const product = products.find(p => p.id === productId);
+
+      const actualProductId = product?.id || productId;
+
+      const response = await stockItemsApi.getByProductId(actualProductId);
+
+      setProductStockItems(prev => ({ ...prev, [productId]: response.batches || [] }));
+
+    } catch (error) {
+
+      console.error(`Failed to load stock items for product ${productId}:`, error);
+
+    } finally {
+
+      setLoadingStockItems(prev => ({ ...prev, [productId]: false }));
+
+    }
+
+  };
+
+
 
   const fetchOverdueSales = async () => {
+
     setLoadingOverdue(true);
+
     try {
+
       const data = await salesApi.getOverdueSales();
+
       setOverdueSales(data);
+
     } catch (error: unknown) {
+
       message.error(t('sales.errorLoadingOverdue', { defaultValue: 'Ошибка при загрузке просроченных продаж' }));
+
     } finally {
+
       setLoadingOverdue(false);
+
     }
+
   };
+
+
 
   const loadOverdueSaleDetails = async (id: number) => {
+
     setLoadingOverdueDetails(true);
+
     try {
+
       const detailedSale = await salesApi.getOverdueSaleById(id);
+
       setSelectedOverdueSale(detailedSale);
+
     } catch (error: unknown) {
+
       message.error(t('sales.errorLoadingDetails', { defaultValue: 'Ошибка при загрузке деталей продажи' }));
+
     } finally {
+
       setLoadingOverdueDetails(false);
+
     }
+
   };
 
+
+
   useEffect(() => {
+
     fetchSales();
+
     fetchCustomers();
+
+    fetchDebtors();
+
     fetchProducts();
+
     fetchStyles();
+
+    fetchUsers();
+
     fetchOverdueSales();
+
   }, []);
 
+
+
   useEffect(() => {
+
     fetchSales();
+
   }, [selectedDate]);
 
+
+
   useEffect(() => {
-    if (selectedSale && detailModalVisible && !selectedSale.items) {
-      loadSaleDetails(selectedSale.id);
+
+    fetchSales();
+
+  }, [selectedSellerId]);
+
+
+
+  useEffect(() => {
+
+    if (!shouldShowDebtorSelect) {
+
+      form.setFieldValue('debtor_id', undefined);
+
     }
+
+  }, [shouldShowDebtorSelect, form]);
+
+
+
+  useEffect(() => {
+
+    if (selectedSale && detailModalVisible && !selectedSale.items) {
+
+      loadSaleDetails(selectedSale.id);
+
+    }
+
   }, [selectedSale, detailModalVisible]);
 
+
+
   useEffect(() => {
+
     if (selectedOverdueSale && overdueDetailModalVisible && !selectedOverdueSale.items) {
+
       loadOverdueSaleDetails(selectedOverdueSale.id);
+
     }
+
   }, [selectedOverdueSale, overdueDetailModalVisible]);
 
+
+
   useEffect(() => {
+
     if (selectedReceiptSale && receiptModalVisible && !selectedReceiptSale.items) {
+
       loadSaleDetails(selectedReceiptSale.id);
+
     }
+
   }, [selectedReceiptSale, receiptModalVisible]);
 
+
+
   const loadSaleDetails = async (id: number) => {
+
     setLoadingSaleDetails(true);
+
     try {
+
       const detailedSale = await salesApi.getById(id);
+
       console.log('Server response for sale details:', detailedSale);
+
       setSelectedSale(detailedSale);
+
       // Also update selectedReceiptSale if it's the same sale
+
       if (selectedReceiptSale && selectedReceiptSale.id === id) {
+
         setSelectedReceiptSale(detailedSale);
+
       }
+
     } catch (error: unknown) {
+
       console.error('Error loading sale details:', error);
+
       message.error(t('sales.errorLoadingDetails', { defaultValue: 'Error loading sale details' }));
+
     } finally {
+
       setLoadingSaleDetails(false);
+
     }
+
   };
+
+
 
   
+
   const handleSearch = (value: string) => {
+
     setSearchText(value);
+
     // Note: Search is done on client side as API doesn't support search
+
   };
+
+
 
   const handleDelete = async (id: number) => {
+
     try {
+
       await salesApi.delete(id);
+
       message.success(t('sales.saleDeleted'));
+
       fetchSales();
+
     } catch (error: unknown) {
+
       const axiosError = error as { response?: { status: number } };
+
       if (axiosError.response?.status === 404) {
+
         message.error(t('errors.notFound'));
+
       } else {
+
         message.error(t('sales.errorDeleting'));
+
       }
+
     }
+
   };
+
+
 
   const handleCreate = async (values: any) => {
+
     setCreating(true);
+
     try {
+
       if (saleItems.length === 0) {
+
         message.error(t('sales.addAtLeastOneItem', { defaultValue: 'Добавьте хотя бы один товар' }));
+
         return;
+
       }
+
+
 
       // Group items by product and validate
+
       const groupedItems = new Map<number, CreateSaleItemLocal[]>();
+
       saleItems.forEach(item => {
+
         if (!groupedItems.has(item.product_id)) {
+
           groupedItems.set(item.product_id, []);
+
         }
+
         groupedItems.get(item.product_id)!.push(item);
+
       });
+
+
 
       // Validate each group
+
       for (const [productId, items] of groupedItems.entries()) {
+
         const selectedProduct = products.find(p => p.id === productId);
+
         if (selectedProduct?.type === 'batch') {
+
           const groupBatchId = productGroups.find(g => g.productId === productId)?.stock_item_id;
+
           if (!groupBatchId) {
+
             message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+
             setCreating(false);
+
             return;
+
           }
+
           // Apply group batch to all items in the group
+
           items.forEach(item => {
+
             item.stock_item_id = groupBatchId;
+
           });
+
         }
+
       }
+
+
 
       // Validate each sale item
+
       for (const item of saleItems) {
+
         if (!item.product_id || item.product_id === 0) {
+
           message.error(t('sales.selectProductForAll', { defaultValue: 'Выберите товар для всех позиций' }));
+
           setCreating(false);
+
           return;
+
         }
+
         const selectedProduct = products.find(p => p.id === item.product_id);
+
         if (selectedProduct?.type === 'batch' && !item.stock_item_id) {
+
           // This should not happen as we set it above, but keep as fallback
+
           message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+
           setCreating(false);
+
           return;
+
         }
+
         if (!item.quantity || item.quantity <= 0) {
+
           message.error(t('sales.specifyQuantity', { defaultValue: 'Укажите корректное количество для всех позиций' }));
+
           setCreating(false);
+
           return;
+
         }
+
         if (!item.unit_price || item.unit_price <= 0) {
+
           message.error(t('sales.specifyPrice', { defaultValue: 'Укажите корректную цену для всех позиций' }));
+
           setCreating(false);
+
           return;
+
         }
+
       }
+
+
 
       const createData: any = {
+
         customer_id: values.customer_id,
+
         payment_status: values.payment_status,
+
         items: saleItems.map(({ stock_item_id, style_id, ...rest }) => ({ 
+
           ...rest, 
+
           ...(stock_item_id && { stock_item_id }), 
+
           ...(style_id && { style_id }) 
+
         })),
+
       };
+
       
+
       if ((values.payment_status === 'DEBT' || values.payment_status === 'PARTIAL') && values.debt_deadline) {
+
         createData.debt_deadline = values.debt_deadline.format('YYYY-MM-DD');
+
       }
+
       
+
       if (values.payment_status === 'PARTIAL') {
+
         // Для статуса "Частично" требуем заполнение хотя бы одного поля оплаты
+
         if (!values.cash_amount && !values.electronic_amount) {
+
           message.error(t('sales.partialPaymentRequired', { defaultValue: 'Для статуса "Частично" заполните хотя бы одно поле: Наличные или Электронные' }));
+
           return;
+
         }
+
         createData.cash_amount = values.cash_amount || 0;
+
         createData.electronic_amount = values.electronic_amount || 0;
+
       } else if (values.payment_status === 'PAID') {
+
         // Для статуса "Оплачено" требуем заполнение хотя бы одного поля оплаты
+
         if (!values.cash_amount && !values.electronic_amount) {
+
           message.error(t('sales.paymentRequired', { defaultValue: 'Для статуса "Оплачено" заполните хотя бы одно поле: Наличные или Электронные' }));
+
           return;
+
         }
+
         createData.cash_amount = values.cash_amount || 0;
+
         createData.electronic_amount = values.electronic_amount || 0;
+
       }
+
       
+
       
+
       console.log('Creating sale with data:', createData);
-      await salesApi.create(createData);
-      message.success(t('sales.saleCreated'));
-      form.resetFields();
-      setSaleItems([]);
-      setPaymentStatus('PAID');
-      setActiveTab('list');
-      fetchSales();
-    } catch (error: unknown) {
-      const axiosError = error as { response?: { status: number; data?: { message?: string; error?: string } }; message?: string };
-      console.log('Server error response:', axiosError.response);
-      console.log('Error message:', axiosError.response?.data?.message);
-      console.log('Error data:', axiosError.response?.data);
-      if (axiosError.response?.status === 400) {
-        const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Проверьте обязательные поля';
-        console.log('Final error message:', errorMessage);
-        
-        // Handle specific stock error - check multiple possible formats
-        if (errorMessage.includes('Insufficient stock') || errorMessage.includes('insufficient stock') || errorMessage.includes('недостаточно')) {
-          let productId = null;
-          
-          // Try different regex patterns
-          const match1 = errorMessage.match(/product (\d+)/);
-          const match2 = errorMessage.match(/товара? (\d+)/);
-          const match3 = errorMessage.match(/(\d+)/);
-          
-          if (match1) productId = match1[1];
-          else if (match2) productId = match2[1];
-          else if (match3) productId = match3[1];
-          
-          if (productId) {
-            const product = products.find(p => p.id === parseInt(productId));
-            const productName = product?.name || `товар #${productId}`;
-            setStockErrorModal({ visible: true, productName });
+
+      const createdSale = await salesApi.create(createData);
+
+      if (shouldShowDebtorSelect) {
+
+        const totalAmount = saleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+
+        const paidAmount = (values.cash_amount || 0) + (values.electronic_amount || 0);
+
+        const debtAmount = values.payment_status === 'PARTIAL' ? totalAmount - paidAmount : totalAmount;
+
+        if (debtAmount > 0) {
+
+          if (typeof values.debtor_id === 'string' && values.debtor_id.startsWith(newDebtorOptionPrefix)) {
+
+            const debtorName = values.debtor_id.replace(newDebtorOptionPrefix, '').trim();
+
+            await debtorsApi.create({
+
+              full_name: debtorName,
+
+              initial_debt: debtAmount,
+
+              description: `Долг по продаже #${createdSale.id}`,
+
+            });
+
+            fetchDebtors();
+
           } else {
-            setStockErrorModal({ visible: true, productName: 'товара' });
+
+            await debtorOperationsApi.createBorrowed({
+
+              debtor_id: Number(values.debtor_id),
+
+              amount: debtAmount,
+
+              description: `Долг по продаже #${createdSale.id}`,
+
+            });
+
           }
-        } else {
-          message.error(errorMessage);
+
         }
-      } else if (axiosError.message?.includes('Network Error')) {
-        message.error(t('errors.networkError'));
-      } else {
-        message.error(t('sales.errorCreating'));
+
       }
+
+      message.success(t('sales.saleCreated'));
+
+      form.resetFields();
+
+      setSaleItems([]);
+
+      setPaymentStatus('PAID');
+
+      setActiveTab('list');
+
+      fetchSales();
+
+    } catch (error: unknown) {
+
+      const axiosError = error as { response?: { status: number; data?: { message?: string; error?: string } }; message?: string };
+
+      console.log('Server error response:', axiosError.response);
+
+      console.log('Error message:', axiosError.response?.data?.message);
+
+      console.log('Error data:', axiosError.response?.data);
+
+      if (axiosError.response?.status === 400) {
+
+        const errorMessage = axiosError.response.data?.message || axiosError.response.data?.error || 'Проверьте обязательные поля';
+
+        console.log('Final error message:', errorMessage);
+
+        
+
+        // Handle specific stock error - check multiple possible formats
+
+        if (errorMessage.includes('Insufficient stock') || errorMessage.includes('insufficient stock') || errorMessage.includes('недостаточно')) {
+
+          let productId = null;
+
+          
+
+          // Try different regex patterns
+
+          const match1 = errorMessage.match(/product (\d+)/);
+
+          const match2 = errorMessage.match(/товара? (\d+)/);
+
+          const match3 = errorMessage.match(/(\d+)/);
+
+          
+
+          if (match1) productId = match1[1];
+
+          else if (match2) productId = match2[1];
+
+          else if (match3) productId = match3[1];
+
+          
+
+          if (productId) {
+
+            const product = products.find(p => p.id === parseInt(productId));
+
+            const productName = product?.name || `товар #${productId}`;
+
+            setStockErrorModal({ visible: true, productName });
+
+          } else {
+
+            setStockErrorModal({ visible: true, productName: 'товара' });
+
+          }
+
+        } else {
+
+          message.error(errorMessage);
+
+        }
+
+      } else if (axiosError.message?.includes('Network Error')) {
+
+        message.error(t('errors.networkError'));
+
+      } else {
+
+        message.error(t('sales.errorCreating'));
+
+      }
+
     } finally {
+
       setCreating(false);
+
     }
+
   };
+
+
 
   const handleEdit = async (sale: Sale) => {
+
     setEditingSale(sale);
+
     setEditModalVisible(true);
+
     form.setFieldsValue({
+
       customer_id: sale.customer_id,
+
       payment_status: sale.payment_status,
+
       cash_amount: sale.cash_amount,
+
       electronic_amount: sale.electronic_amount,
+
       debt_deadline: sale.debt_deadline ? dayjs(sale.debt_deadline) : undefined,
+
     });
+
     
+
     // Load sale details to get items
+
     setLoadingSaleDetails(true);
+
     try {
+
       const saleDetails = await salesApi.getById(sale.id);
+
       if (saleDetails.items) {
+
         const items: UpdateSaleItem[] = saleDetails.items.map(item => ({
+
           product_id: item.product_id,
+
           stock_item_id: item.stock_item_id ?? undefined,
+
           quantity: item.quantity,
+
           unit_price: item.unit_price,
+
           unit_value: item.unit_value || 1.0,
+
         }));
+
         setEditSaleItems(items);
+
         
+
         // Group items by product for edit product groups
+
         const groupedItems = new Map<number, UpdateSaleItem[]>();
+
         items.forEach(item => {
+
           if (!groupedItems.has(item.product_id)) {
+
             groupedItems.set(item.product_id, []);
+
           }
+
           groupedItems.get(item.product_id)!.push(item);
+
         });
+
         
+
         const newEditProductGroups: ProductGroup[] = Array.from(groupedItems.entries()).map(([productId, items]) => ({
+
           productId,
+
           stock_item_id: items.find(item => item.stock_item_id)?.stock_item_id,
+
           items: []
+
         }));
+
         setEditProductGroups(newEditProductGroups);
+
         
+
         // Preload stock items for batch products
+
         items.forEach(item => {
+
           const product = products.find(p => p.id === item.product_id);
+
           if (product?.type === 'batch') {
+
             fetchProductStockItems(item.product_id);
+
           }
+
         });
+
       }
+
     } catch (error) {
+
       message.error(t('sales.errorLoadingDetails', { defaultValue: 'Ошибка при загрузке деталей продажи' }));
+
     } finally {
+
       setLoadingSaleDetails(false);
+
     }
+
   };
+
+
 
   const handleUpdate = async (values: any) => {
+
     if (!editingSale) return;
+
     
+
     if (editSaleItems.length === 0) {
+
       message.error(t('sales.addAtLeastOneItem', { defaultValue: 'Добавьте хотя бы один товар' }));
+
       return;
+
     }
+
+
 
     // Group items by product and validate
+
     const groupedEditItems = new Map<number, UpdateSaleItem[]>();
+
     editSaleItems.forEach(item => {
+
       if (!groupedEditItems.has(item.product_id)) {
+
         groupedEditItems.set(item.product_id, []);
+
       }
+
       groupedEditItems.get(item.product_id)!.push(item);
+
     });
+
+
 
     // Validate each group
+
     for (const [productId, items] of groupedEditItems.entries()) {
+
       const selectedProduct = products.find(p => p.id === productId);
+
       if (selectedProduct?.type === 'batch') {
+
         const groupBatchId = editProductGroups.find(g => g.productId === productId)?.stock_item_id;
+
         if (!groupBatchId) {
+
           message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+
           return;
+
         }
+
         // Apply group batch to all items in the group
+
         items.forEach(item => {
+
           item.stock_item_id = groupBatchId;
+
         });
+
       }
+
     }
+
+
 
     // Validate each sale item
+
     for (const item of editSaleItems) {
+
       if (!item.product_id || item.product_id === 0) {
+
         message.error(t('sales.selectProductForAll', { defaultValue: 'Выберите товар для всех позиций' }));
+
         return;
+
       }
+
       const selectedProduct = products.find(p => p.id === item.product_id);
+
       if (selectedProduct?.type === 'batch' && !item.stock_item_id) {
+
         // This should not happen as we set it above, but keep as fallback
+
         message.error(t('sales.selectBatchForAllBatchProducts', { defaultValue: 'Выберите партию для всех batch товаров' }));
+
         return;
+
       }
+
       if (!item.quantity || item.quantity <= 0) {
+
         message.error(t('sales.specifyQuantity', { defaultValue: 'Укажите корректное количество для всех позиций' }));
+
         return;
+
       }
+
       if (!item.unit_price || item.unit_price <= 0) {
+
         message.error(t('sales.specifyPrice', { defaultValue: 'Укажите корректную цену для всех позиций' }));
+
         return;
+
       }
+
     }
+
+
 
     // Валидация полей оплаты для статусов PAID и PARTIAL
+
     if (values.payment_status === 'PAID') {
+
       if (!values.cash_amount && !values.electronic_amount) {
+
         message.error(t('sales.paymentRequired', { defaultValue: 'Для статуса "Оплачено" заполните хотя бы одно поле: Наличные или Электронные' }));
+
         return;
+
       }
+
     } else if (values.payment_status === 'PARTIAL') {
+
       if (!values.cash_amount && !values.electronic_amount) {
+
         message.error(t('sales.partialPaymentRequired', { defaultValue: 'Для статуса "Частично" заполните хотя бы одно поле: Наличные или Электронные' }));
+
         return;
+
       }
+
     }
+
+
 
     setEditing(true);
+
     try {
+
       // Ensure all items have proper numeric values
+
       const validatedItems = editSaleItems.map(item => ({
+
         product_id: item.product_id,
+
         stock_item_id: item.stock_item_id,
+
         quantity: Number(item.quantity),
+
         unit_price: Number(item.unit_price),
+
         unit_value: Number(item.unit_value) > 0 ? Number(item.unit_value) : 1.0,
+
       }));
+
       
+
       console.log('Sending update with items:', validatedItems);
+
       
+
       const updateData = {
+
         customer_id: values.customer_id,
+
         payment_status: values.payment_status,
+
         items: validatedItems,
+
         // Добавляем поля оплаты если они есть
+
         ...(values.cash_amount && { cash_amount: Number(values.cash_amount) }),
+
         ...(values.electronic_amount && { electronic_amount: Number(values.electronic_amount) }),
+
       };
+
+
 
       await salesApi.update(editingSale.id, updateData);
+
       message.success(t('sales.saleUpdated'));
+
       setEditModalVisible(false);
+
       setEditingSale(null);
+
       setEditSaleItems([]);
+
       setEditProductGroups([]);
+
       form.resetFields();
+
       fetchSales();
+
     } catch (error: unknown) {
+
       console.error('Update sale error:', error);
+
       const axiosError = error as { response?: { status: number; data?: { message?: string; productName?: string; errors?: any } }; message?: string };
+
       console.error('Server response:', axiosError.response?.data);
+
       if (axiosError.response?.status === 400) {
+
         const errorMessage = axiosError.response.data?.message || 'Ошибка при обновлении продажи';
+
         if (axiosError.response.data?.productName) {
+
           setStockErrorModal({
+
             visible: true,
+
             productName: axiosError.response.data.productName,
+
           });
+
         } else {
+
           message.error(errorMessage);
+
         }
+
       } else if (axiosError.message?.includes('Network Error')) {
+
         message.error(t('errors.networkError'));
+
       } else {
+
         message.error(t('sales.errorUpdating'));
+
       }
+
     } finally {
+
       setEditing(false);
+
     }
+
   };
+
+
 
   // Helper function to render stage tags
+
   const getStageTag = (stage: SaleStage) => {
+
     const stageConfig = {
+
       ordered: { color: 'default', icon: <ShoppingOutlined />, text: t('sales.ordered', { defaultValue: 'Заказан' }) },
+
       ready: { color: 'processing', icon: <CheckCircleOutlined />, text: t('sales.ready', { defaultValue: 'Готов' }) },
+
       delivered: { color: 'success', icon: <CheckCircleFilled />, text: t('sales.delivered', { defaultValue: 'Выдан' }) },
+
     };
+
     const config = stageConfig[stage];
+
     return (
+
       <Tag color={config.color} icon={config.icon}>
+
         {config.text}
+
       </Tag>
+
     );
+
   };
+
+
 
   // Handler to update sale stage
+
   const handleUpdateStage = async (sale: Sale, newStage: SaleStage) => {
+
     try {
+
       await salesApi.updateStage(sale.id, { stage: newStage });
+
       message.success(t('sales.stageUpdated', { defaultValue: 'Этап обновлен' }));
+
       fetchSales();
+
     } catch (error: unknown) {
+
       const axiosError = error as { response?: { data?: { message?: string } } };
+
       message.error(axiosError.response?.data?.message || t('sales.stageUpdateError', { defaultValue: 'Ошибка обновления этапа' }));
+
     }
+
   };
+
+
 
   // Handler to view stage history
+
   const handleViewStageHistory = async (sale: Sale) => {
+
     setSelectedSaleForStage(sale);
+
     setStageHistoryModalVisible(true);
+
     setLoadingStageHistory(true);
+
     try {
+
       const data = await salesApi.getStageHistory(sale.id);
+
       setStageHistory(data);
+
     } catch (error) {
+
       message.error(t('sales.stageHistoryError', { defaultValue: 'Ошибка загрузки истории' }));
+
     } finally {
+
       setLoadingStageHistory(false);
+
     }
+
   };
+
+
 
   // Handler to open payment modal
+
   const handleOpenPaymentModal = (sale: Sale) => {
+
     console.log('Sale data for payment modal:', sale);
+
     setSelectedSaleForPayment(sale);
+
     const totalAmount = parseFloat(sale.total_amount) || 0;
+
     const cashAmount = parseFloat(sale.cash_amount) || 0;
+
     const electronicAmount = parseFloat(sale.electronic_amount) || 0;
+
     const remaining = totalAmount - (cashAmount + electronicAmount);
+
     console.log('Payment calculation:', { totalAmount, cashAmount, electronicAmount, remaining });
+
     setPaymentAmount(remaining > 0 ? remaining : 0);
+
     setPaymentModalVisible(true);
+
   };
+
+
 
   // Handler to add payment
+
   const handleAddPayment = async () => {
+
     if (!selectedSaleForPayment || paymentAmount <= 0) return;
+
     
+
     setAddingPayment(true);
+
     try {
+
       const result = await salesApi.addPayment(selectedSaleForPayment.id, {
+
         amount: paymentAmount,
+
       });
+
       message.success(result.message);
+
       setPaymentModalVisible(false);
+
       fetchSales();
+
     } catch (error: unknown) {
+
       const axiosError = error as { response?: { data?: { message?: string } } };
+
       message.error(axiosError.response?.data?.message || t('sales.paymentError', { defaultValue: 'Ошибка добавления оплаты' }));
+
     } finally {
+
       setAddingPayment(false);
+
     }
+
   };
+
+
 
   const addSaleItem = () => {
+
     const newItem: CreateSaleItemLocal = {
+
       product_id: 0,
+
       quantity: 0,
+
       unit_price: 0,
+
       unit_value: 0,
+
       stock_item_id: undefined,
+
       style_id: undefined,
+
     };
+
     setSaleItems([...saleItems, newItem]);
+
   };
+
+
 
   // Group sale items by product for UI display
+
   const getGroupedSaleItems = () => {
+
     const groups = new Map<number, CreateSaleItemLocal[]>();
+
     
+
     saleItems.forEach(item => {
+
       if (!groups.has(item.product_id)) {
+
         groups.set(item.product_id, []);
+
       }
+
       groups.get(item.product_id)!.push(item);
+
     });
+
     
+
     return Array.from(groups.entries()).map(([productId, items]) => {
+
       const product = products.find(p => p.id === Number(productId));
+
       const totalMeters = items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0);
+
       const totalPrice = items.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+
       const group = productGroups.find(g => g.productId === Number(productId));
+
       
+
       return {
+
         productId: Number(productId),
+
         product,
+
         items,
+
         totalMeters,
+
         totalPrice,
+
         stock_item_id: group?.stock_item_id
+
       };
+
     });
+
   };
+
+
 
   const updateSaleItem = (index: number, field: keyof CreateSaleItemLocal, value: any) => {
+
     const updatedItems = [...saleItems];
+
     updatedItems[index] = { ...updatedItems[index], [field]: value };
+
     
+
     // Reset stock_item_id if product changes and is not batch
+
     if (field === 'product_id') {
+
       const selected = products.find(p => p.id === value);
+
       if (selected?.type !== 'batch') {
+
         updatedItems[index].stock_item_id = undefined;
+
         // Remove group batch if product is not batch
+
         setProductGroups(prev => prev.filter(g => g.productId !== value));
+
       } else {
+
         fetchProductStockItems(value);
+
         // Create or update group for batch product
+
         setProductGroups(prev => {
+
           const existing = prev.find(g => g.productId === value);
+
           if (existing) {
+
             return prev.map(g => g.productId === value ? { ...g, productId: value } : g);
+
           } else {
+
             return [...prev, { productId: value, items: [] }];
+
           }
+
         });
+
       }
+
       // Auto-populate unit_price from product selling_price
+
       if (selected?.selling_price) {
+
         updatedItems[index].unit_price = selected.selling_price;
+
       }
+
     }
+
     
+
     setSaleItems(updatedItems);
+
   };
+
+
 
   const updateProductGroupBatch = (productId: number, stockItemId: number | undefined) => {
+
     setProductGroups(prev => {
+
       const existing = prev.find(g => g.productId === productId);
+
       if (existing) {
+
         return prev.map(g => g.productId === productId ? { ...g, stock_item_id: stockItemId } : g);
+
       } else {
+
         return [...prev, { productId, stock_item_id: stockItemId, items: [] }];
+
       }
+
     });
 
+
+
     // Update all items of this product with the new batch
+
     setSaleItems(prev => prev.map(item => {
+
       if (item.product_id === productId) {
+
         const updatedItem = { ...item, stock_item_id: stockItemId };
+
         // Auto-populate unit_price from selected batch selling_price
+
         if (stockItemId) {
+
           const stockItems = productStockItems[productId] || [];
+
           const selectedBatch = stockItems.find(si => si.id === stockItemId);
+
           if (selectedBatch?.selling_price) {
+
             updatedItem.unit_price = selectedBatch.selling_price;
+
           }
+
         }
+
         return updatedItem;
+
       }
+
       return item;
+
     }));
+
   };
+
+
 
   const updateEditProductGroupBatch = (productId: number, stockItemId: number | undefined) => {
+
     setEditProductGroups(prev => {
+
       const existing = prev.find(g => g.productId === productId);
+
       if (existing) {
+
         return prev.map(g => g.productId === productId ? { ...g, stock_item_id: stockItemId } : g);
+
       } else {
+
         return [...prev, { productId, stock_item_id: stockItemId, items: [] }];
+
       }
+
     });
+
+
 
     // Update all items of this product with the new batch
+
     setEditSaleItems(prev => prev.map(item => {
+
       if (item.product_id === productId) {
+
         const updatedItem = { ...item, stock_item_id: stockItemId };
+
         // Auto-populate unit_price from selected batch selling_price
+
         if (stockItemId) {
+
           const stockItems = productStockItems[productId] || [];
+
           const selectedBatch = stockItems.find(si => si.id === stockItemId);
+
           if (selectedBatch?.selling_price) {
+
             updatedItem.unit_price = selectedBatch.selling_price;
+
           }
+
         }
+
         return updatedItem;
+
       }
+
       return item;
+
     }));
+
   };
+
+
 
   // Group edit sale items by product for UI display
+
   const getGroupedEditSaleItems = () => {
+
     const groups = new Map<number, UpdateSaleItem[]>();
+
     
+
     editSaleItems.forEach(item => {
+
       if (!groups.has(item.product_id)) {
+
         groups.set(item.product_id, []);
+
       }
+
       groups.get(item.product_id)!.push(item);
+
     });
+
     
+
     return Array.from(groups.entries()).map(([productId, items]) => {
+
       const product = products.find(p => p.id === Number(productId));
+
       const totalMeters = items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0);
+
       const totalPrice = items.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
+
       const group = editProductGroups.find(g => g.productId === Number(productId));
+
       
+
       return {
+
         productId: Number(productId),
+
         product,
+
         items,
+
         totalMeters,
+
         totalPrice,
+
         stock_item_id: group?.stock_item_id
+
       };
+
     });
+
   };
+
+
 
   const updateEditSaleItem = (index: number, field: keyof UpdateSaleItem, value: any) => {
+
     const updatedItems = [...editSaleItems];
+
     updatedItems[index] = { ...updatedItems[index], [field]: value };
+
     
+
     // Reset stock_item_id if product changes and is not batch
+
     if (field === 'product_id') {
+
       const selected = products.find(p => p.id === value);
+
       if (selected?.type !== 'batch') {
+
         updatedItems[index].stock_item_id = undefined;
+
         // Remove group batch if product is not batch
+
         setEditProductGroups(prev => prev.filter(g => g.productId !== value));
+
       } else {
+
         fetchProductStockItems(value);
+
         // Create or update group for batch product
+
         setEditProductGroups(prev => {
+
           const existing = prev.find(g => g.productId === value);
+
           if (existing) {
+
             return prev.map(g => g.productId === value ? { ...g, productId: value } : g);
+
           } else {
+
             return [...prev, { productId: value, items: [] }];
+
           }
+
         });
+
       }
+
       // Auto-populate unit_price from product selling_price
+
       if (selected?.selling_price) {
+
         updatedItems[index].unit_price = selected.selling_price;
+
       }
+
     }
+
     
+
     setEditSaleItems(updatedItems);
+
   };
+
+
 
   const removeSaleItem = (index: number) => {
+
     const updatedItems = [...saleItems];
+
     updatedItems.splice(index, 1);
+
     setSaleItems(updatedItems);
+
   };
+
+
 
   const handleViewReceipt = (sale: Sale) => {
+
     // Open receipt modal
+
     setSelectedReceiptSale(sale);
+
     setReceiptModalVisible(true);
+
   };
+
+
 
   const handlePrintReceipt = () => {
+
     // Create a new window for printing
+
     const printWindow = window.open('', '_blank');
+
     if (!printWindow) {
+
       message.error('Could not open print window');
+
       return;
+
     }
 
+
+
     // Generate receipt HTML for printing
+
     const receiptHTML = `
+
       <!DOCTYPE html>
+
       <html>
+
       <head>
+
         <title></title>
+
         <style>
+
           @font-face {
+
             font-family: 'Caveat';
+
             font-style: normal;
+
             font-weight: 400;
+
             src: local('Caveat'), local('Caveat-Regular'), url(https://fonts.gstatic.com/s/caveat/v17/Wn6H9gCx1Alz3aGl1kcA.woff2) format('woff2');
+
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+
           }
+
           @font-face {
+
             font-family: 'Caveat';
+
             font-style: normal;
+
             font-weight: 600;
+
             src: local('Caveat'), local('Caveat-Bold'), url(https://fonts.gstatic.com/s/caveat/v17/Wn6H9gCx1Alz9aGl1kcA6wZ.woff2) format('woff2');
+
             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+
           }
+
           @font-face {
+
             font-family: 'Caveat';
+
             font-style: normal;
+
             font-weight: 400;
+
             src: url(https://fonts.gstatic.com/s/caveat/v17/Wn6H9gCx1Alz3aGl1kcA.woff2) format('woff2');
+
             unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+
           }
+
           @font-face {
+
             font-family: 'Caveat';
+
             font-style: normal;
+
             font-weight: 600;
+
             src: url(https://fonts.gstatic.com/s/caveat/v17/Wn6H9gCx1Alz9aGl1kcA6wZ.woff2) format('woff2');
+
             unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+
           }
+
           body {
+
             font-family: 'Caveat', cursive;
+
             font-size: 18px;
+
             line-height: 1.4;
+
             letter-spacing: 0.3px;
+
             color: #333;
+
             background: white;
+
             width: fit-content;
+
             min-width: 400px;
+
             max-width: 400px;
+
             margin: 0 auto;
+
             padding: 20px;
+
           }
+
           .header {
+
             text-align: center;
+
             margin-bottom: 24px;
+
           }
+
           .header h2 {
+
             margin: 0;
+
             font-size: 24px;
+
             font-weight: 600;
+
             color: #222;
+
           }
+
           .receipt-items {
+
             margin-bottom: 20px;
+
           }
+
           .receipt-group {
+
             margin-bottom: 12px;
+
           }
+
           .receipt-group-name {
+
             font-weight: 600;
+
             color: #222;
+
             margin-bottom: 4px;
+
           }
+
           .receipt-item {
+
             display: flex;
+
             justify-content: space-between;
+
             align-items: center;
+
             margin-bottom: 8px;
+
             gap: 10px;
+
           }
+
           .receipt-item-name {
+
             flex: 1;
+
             font-weight: 500;
+
             color: #444;
+
             white-space: nowrap;
+
             overflow: hidden;
+
             text-overflow: ellipsis;
+
           }
+
           .receipt-item-details {
+
             text-align: right;
+
             color: #666;
+
             font-size: 16px;
+
             white-space: nowrap;
+
             flex-shrink: 0;
+
           }
+
           .receipt-total {
+
             text-align: center;
+
             margin-top: 20px;
+
             font-size: 20px;
+
             font-weight: 600;
+
             color: #222;
+
           }
+
           @media print {
+
               @page {
+
                 margin: 0;
+
                 size: auto;
+
               }
+
               body {
+
                 font-size: 18px;
+
                 line-height: 1.4;
+
                 width: fit-content;
+
                 min-width: 400px;
+
                 max-width: 400px;
+
                 margin: 0;
+
                 padding: 15px;
+
               }
+
               @page header {
+
                 display: none;
+
               }
+
               @page footer {
+
                 display: none;
+
               }
+
             }
+
             .header {
+
               margin-bottom: 20px;
+
               padding-bottom: 12px;
+
             }
+
             .receipt-title {
+
               font-size: 22px;
+
             }
+
             .receipt-item {
+
               margin-bottom: 10px;
+
             }
+
             .receipt-item-details {
+
               font-size: 16px;
+
             }
+
             .receipt-total {
+
               font-size: 20px;
+
               margin-top: 16px;
+
               padding-top: 12px;
+
             }
+
           }
+
         </style>
+
       </head>
+
       <body>
+
         <div class="receipt-items">
+
           ${(() => {
+
             if (!selectedReceiptSale?.items?.length) return '';
+
             // Group items by product name
+
             const grouped = selectedReceiptSale.items.reduce((acc, item) => {
+
               if (!acc[item.product_name]) {
+
                 acc[item.product_name] = [];
+
               }
+
               acc[item.product_name].push(item);
+
               return acc;
+
             }, {} as Record<string, typeof selectedReceiptSale.items>);
 
+
+
             return Object.entries(grouped).map(([productName, items]) => `
+
               <div class="receipt-group">
+
                 <div class="receipt-group-name">${productName}</div>
+
                 ${items.map(item => `
+
                   <div class="receipt-item-details" style="text-align: right; margin-bottom: 2px;">
+
                     ${parseFloat(item.quantity.toString()).toString()}${item.unit_value ? `×${parseFloat(item.unit_value.toString()).toString()}м` : ''} ${item.style_name ? `(${item.style_name})` : ''} × ${parseFloat(item.unit_price.toString()).toString()} смн = ${(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()} смн
+
                   </div>
+
                 `).join('')}
+
               </div>
+
             `).join('');
+
           })()}
+
         </div>
+
         
+
         <div class="receipt-total">
+
           ${t('common.totalAmount', { defaultValue: 'Total Amount' })}: ${selectedReceiptSale?.total_amount?.toLocaleString()}
+
         </div>
+
       </body>
+
       </html>
+
     `;
 
+
+
     // Write content to the new window
+
     printWindow.document.write(receiptHTML);
+
     printWindow.document.close();
 
+
+
     // Wait for content to load, then print
+
     printWindow.onload = () => {
+
       // Hide print headers and footers
+
       setTimeout(() => {
+
         printWindow.document.title = '';
+
         printWindow.print();
+
         printWindow.close();
+
       }, 100);
+
     };
+
   };
 
+
+
   const columns: TableProps<Sale>['columns'] = [
+
     {
+
       title: '№',
+
       key: 'rowNumber',
+
       width: 60,
+
       render: (_: unknown, __: any, index: number) => index + 1,
+
     },
+
     {
+
       title: t('sales.customer'),
+
       dataIndex: 'customer_name',
+
       key: 'customer_name',
+
       ellipsis: true,
+
     },
+
     {
-      title: t('common.totalAmount'),
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      render: (amount: number) => (
-        <span style={{ color: '#52c41a' }}>
-          <DollarOutlined style={{ marginRight: 4 }} />
-          {amount.toLocaleString()}
+
+      title: t('sales.seller', { defaultValue: 'Продавец' }),
+
+      dataIndex: 'seller_name',
+
+      key: 'seller_name',
+
+      ellipsis: true,
+
+      render: (seller_name: string) => (
+
+        <span style={{ color: '#1890ff' }}>
+
+          <UserOutlined style={{ marginRight: 4 }} />
+
+          {seller_name}
+
         </span>
+
       ),
+
     },
+
     {
+
+      title: t('common.totalAmount'),
+
+      dataIndex: 'total_amount',
+
+      key: 'total_amount',
+
+      render: (amount: number) => (
+
+        <span style={{ color: '#52c41a' }}>
+
+          <DollarOutlined style={{ marginRight: 4 }} />
+
+          {amount.toLocaleString()}
+
+        </span>
+
+      ),
+
+    },
+
+    {
+
       title: t('sales.discount', { defaultValue: 'Скидка' }),
+
       dataIndex: 'discount',
+
       key: 'discount',
+
       render: (discount: string) => {
+
         const discountValue = parseFloat(discount) || 0;
+
         if (discountValue > 0) {
+
           return (
+
             <span style={{ color: '#ff4d4f' }}>
+
               <DollarOutlined style={{ marginRight: 4 }} />
+
               {discountValue.toLocaleString()}
+
             </span>
+
           );
+
         }
+
         return '-';
+
       },
+
     },
+
     {
+
       title: t('common.items'),
+
       key: 'items',
+
       render: (_: any, record: Sale) => (
+
         <div onClick={(e) => e.stopPropagation()}>
+
           <Collapse ghost size="small">
+
             <Panel header={`${record.items?.length || 0} ${t('common.items', { defaultValue: 'товаров' })}`} key="1">
+
               {record.items?.map((item: SaleItem, idx: number) => (
+
                 <div key={idx} style={{ padding: '4px 0', fontSize: 12, borderBottom: idx < (record.items?.length || 0) - 1 ? '1px solid #f0f0f0' : 'none' }}>
+
                   <div style={{ fontWeight: 500 }}>{item.product_name}</div>
+
                   <div style={{ color: '#666' }}>
+
                     {item.quantity} × {item.unit_price.toLocaleString()} = {item.total_price.toLocaleString()}
+
                   </div>
+
                 </div>
+
               ))}
+
             </Panel>
+
           </Collapse>
+
         </div>
+
       ),
+
     },
+
     {
+
       title: t('sales.paymentStatus', { defaultValue: 'Статус оплаты' }),
+
       dataIndex: 'payment_status',
+
       key: 'payment_status',
+
       render: (status: string) => (
+
         <Tag color={status === 'PAID' ? 'green' : status === 'PARTIAL' ? 'blue' : 'orange'}>
+
           {status === 'PAID' ? t('sales.paid', { defaultValue: 'Оплачено' }) : status === 'PARTIAL' ? t('sales.partial', { defaultValue: 'Частично' }) : t('sales.debt', { defaultValue: 'Долг' })}
+
         </Tag>
+
       ),
+
     },
+
     {
+
       title: t('sales.stage', { defaultValue: 'Этап' }),
+
       dataIndex: 'stage',
+
       key: 'stage',
+
       render: (stage: SaleStage) => getStageTag(stage),
+
     },
+
     {
+
       title: t('common.date'),
+
       dataIndex: 'created_at',
+
       key: 'created_at',
+
       render: (date: string) => new Date(date).toLocaleDateString(),
+
     },
+
     {
+
       title: t('common.actions'),
+
       key: 'actions',
+
       width: 240,
+
       render: (_: unknown, record: Sale) => (
+
         <Space size="small">
+
           {/* Stage buttons */}
+
           {record.stage === 'ordered' && (
+
             <Button
+
               icon={<CheckCircleOutlined />}
+
               onClick={(e) => {
+
                 e.stopPropagation();
+
                 handleUpdateStage(record, 'ready');
+
               }}
+
               size="small"
+
               type="primary"
+
               title={t('sales.markReady', { defaultValue: 'Отметить готовым' })}
+
             />
+
           )}
+
           {record.stage === 'ready' && (
+
             <Button
+
               icon={<CarOutlined />}
+
               onClick={(e) => {
+
                 e.stopPropagation();
+
                 handleUpdateStage(record, 'delivered');
+
               }}
+
               size="small"
+
               type="primary"
+
               title={t('sales.markDelivered', { defaultValue: 'Отметить выданным' })}
+
             />
+
           )}
+
           
+
           {/* Payment button for PARTIAL or DEBT */}
+
           {(record.payment_status === 'PARTIAL' || record.payment_status === 'DEBT') && (
+
             <Button
+
               icon={<DollarOutlined />}
+
               onClick={(e) => {
+
                 e.stopPropagation();
+
                 handleOpenPaymentModal(record);
+
               }}
+
               size="small"
+
               title={t('sales.addPayment', { defaultValue: 'Добавить оплату' })}
+
             />
+
           )}
+
           
+
           {/* Stage history button */}
+
           <Button
+
             icon={<HistoryOutlined />}
+
             onClick={(e) => {
+
               e.stopPropagation();
+
               handleViewStageHistory(record);
+
             }}
+
             size="small"
+
             title={t('sales.stageHistory', { defaultValue: 'История этапов' })}
+
           />
+
           
+
           <Button
+
             icon={<PrinterOutlined />}
+
             onClick={(e) => {
+
               e.stopPropagation();
+
               handleViewReceipt(record);
+
             }}
+
             size="small"
+
             title={t('common.viewReceipt', { defaultValue: 'View Receipt' })}
+
             type="default"
+
           />
+
           <Button
+
             icon={<EditOutlined />}
+
             onClick={(e) => {
+
               e.stopPropagation();
+
               handleEdit(record);
+
             }}
+
             size="small"
+
             title={t('common.edit')}
+
           />
+
           <Popconfirm
+
             title={t('sales.confirmDelete')}
+
             description={t('sales.deleteWarning', { defaultValue: 'Это действие нельзя отменить, товары вернутся на склад' })}
+
             onConfirm={() => handleDelete(record.id)}
+
             okText={t('common.yes')}
+
             cancelText={t('common.no')}
+
           >
+
             <Button 
+
               danger 
+
               icon={<DeleteOutlined />} 
+
               size="small" 
+
               title={t('common.delete')}
+
               onClick={(e) => e.stopPropagation()}
+
             />
+
           </Popconfirm>
+
         </Space>
+
       ),
+
     },
+
   ];
+
+
 
   const itemColumns: TableProps<SaleItem>['columns'] = [
+
     {
+
       title: t('common.product'),
+
       dataIndex: 'product_name',
+
       key: 'product_name',
+
       ellipsis: true,
+
     },
+
     {
+
       title: 'Стиль',
+
       dataIndex: 'style_name',
+
       key: 'style_name',
+
       width: 100,
+
       render: (style_name: string | null | undefined) => style_name || '-',
+
     },
+
     {
+
       title: t('common.quantity'),
+
       dataIndex: 'quantity',
+
       key: 'quantity',
+
       width: 80,
+
       render: (quantity: number) => `${quantity} шт`,
+
     },
+
     {
+
       title: t('sales.unitValue', { defaultValue: 'Количество' }),
+
       dataIndex: 'unit_value',
+
       key: 'unit_value',
+
       width: 100,
+
       render: (unit_value: number) => `${unit_value} м`,
+
     },
+
     {
+
       title: t('sales.unitPrice'),
+
       dataIndex: 'unit_price',
+
       key: 'unit_price',
+
       render: (price: number) => price.toLocaleString(),
+
       width: 100,
+
     },
+
     {
+
       title: t('common.total'),
+
       key: 'total',
+
       render: (_, record: SaleItem) => (
+
         <strong>{(record.quantity * record.unit_price * (record.unit_value || 1.0)).toLocaleString()}</strong>
+
       ),
+
       width: 100,
+
     },
+
   ];
 
+
+
   const tabItems = [
+
     {
+
       key: 'list',
+
       label: (
+
         <span>
+
           <TeamOutlined />
+
           {t('sales.list')}
+
         </span>
+
       ),
+
       children: (
+
         <div>
+
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+
             <Col xs={24} sm={12} md={6}>
+
               <Input
+
                 placeholder={t('sales.searchPlaceholder', { defaultValue: 'Поиск продаж...' })}
+
                 prefix={<SearchOutlined />}
+
                 value={searchText}
+
                 onChange={(e) => handleSearch(e.target.value)}
+
                 allowClear
+
               />
+
             </Col>
+
             <Col xs={24} sm={12} md={6}>
+
               <Select
+
                 placeholder={t('sales.filterByCustomer', { defaultValue: 'Фильтр по клиенту' })}
+
                 value={undefined}
+
                 onChange={() => {}}
+
                 allowClear
+
                 style={{ width: '100%' }}
+
               >
+
                 {customers.map(customer => (
+
                   <Option key={customer.id} value={customer.id}>
+
                     {customer.full_name}
+
                   </Option>
+
                 ))}
+
               </Select>
+
             </Col>
+
             <Col xs={24} sm={12} md={6}>
+
               <DatePicker
+
                 placeholder={t('sales.filterByDate', { defaultValue: 'Фильтр по дате' })}
+
                 value={selectedDate ? dayjs(selectedDate) : null}
+
                 onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
+
                 style={{ width: '100%' }}
+
                 allowClear
+
               />
+
             </Col>
-          </Row>
-          <Table
-            columns={columns}
-            dataSource={sales.filter(sale => 
-              sale.customer_name.toLowerCase().includes(searchText.toLowerCase()) ||
-              sale.id.toString().includes(searchText)
-            )}
-            rowKey="id"
-            loading={loading}
-            pagination={false}
-            scroll={{ x: 'max-content' }}
-            size="small"
-            onRow={(record) => ({
-              onClick: () => {
-                setSelectedSale(record);
-                setDetailModalVisible(true);
-              },
-              style: { cursor: 'pointer' }
-            })}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'overdue-list',
-      label: (
-        <span>
-          <CalendarOutlined />
-          {t('sales.overdueSalesList', { defaultValue: 'Просроченные продажи' })}
-        </span>
-      ),
-      children: (
-        <div>
-          <Table
-            columns={[
-              {
-                title: '№',
-                key: 'rowNumber',
-                width: 60,
-                render: (_: unknown, __: any, index: number) => index + 1,
-              },
-              {
-                title: t('common.customer'),
-                dataIndex: 'customer_name',
-                key: 'customer_name',
-                ellipsis: true,
-              },
-              {
-                title: t('common.totalAmount'),
-                dataIndex: 'total_amount',
-                key: 'total_amount',
-                render: (amount: number) => (
-                  <span style={{ color: '#ff4d4f' }}>
-                    <DollarOutlined style={{ marginRight: 4 }} />
-                    {amount.toLocaleString()}
-                  </span>
-                ),
-              },
-              {
-                title: t('sales.debtDeadline', { defaultValue: 'Срок долга' }),
-                dataIndex: 'debt_deadline',
-                key: 'debt_deadline',
-                render: (date: string) => {
-                  const deadline = dayjs(date);
-                  const now = dayjs();
-                  const daysOverdue = now.diff(deadline, 'day');
-                  return (
-                    <span style={{ color: daysOverdue > 0 ? '#ff4d4f' : '#52c41a' }}>
-                      <CalendarOutlined style={{ marginRight: 4 }} />
-                      {deadline.format('DD.MM.YYYY')}
-                      {daysOverdue > 0 && (
-                        <Text style={{ marginLeft: 8, color: '#ff4d4f' }}>
-                          (+{daysOverdue} {t('common.days', { defaultValue: 'дней' })})
-                        </Text>
-                      )}
-                    </span>
-                  );
-                },
-              },
-              {
-                title: t('common.date'),
-                dataIndex: 'created_at',
-                key: 'created_at',
-                render: (date: string) => new Date(date).toLocaleDateString(),
-              },
-            ]}
-            dataSource={overdueSales}
-            rowKey="id"
-            loading={loadingOverdue}
-            pagination={false}
-            scroll={{ x: 'max-content' }}
-            size="small"
-            onRow={(record) => ({
-              onClick: () => {
-                setSelectedOverdueSale(null);
-                setOverdueDetailModalVisible(true);
-                loadOverdueSaleDetails(record.id);
-              },
-              style: { cursor: 'pointer' }
-            })}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'create',
-      label: (
-        <span>
-          <PlusOutlined />
-          {t('common.create', { defaultValue: 'Created' })}
-        </span>
-      ),
-      children: (
-        <Row justify="center">
-          <Col xs={24} sm={24} md={20} lg={16} xl={12}>
-            <Card>
-              <Title level={4} style={{ textAlign: 'center', marginBottom: 24 }}>
-                <ShoppingCartOutlined /> {t('sales.create')}
-              </Title>
-              <Form
-                form={form}
-                name="createSale"
-                onFinish={handleCreate}
-                autoComplete="off"
-                layout="vertical"
-                size="large"
+
+            <Col xs={24} sm={12} md={6}>
+
+              <Select
+
+                placeholder={t('sales.filterBySeller', { defaultValue: 'Фильтр по продавцу' })}
+
+                value={selectedSellerId}
+
+                onChange={(value) => setSelectedSellerId(value)}
+
+                allowClear
+
+                style={{ width: '100%' }}
+
               >
-                <Form.Item
-                  name="customer_id"
-                  label={t('sales.customer')}
-                >
-                  <Select placeholder={t('sales.selectCustomer', { defaultValue: 'Выберите клиента' })} prefix={<UserOutlined />}>
-                    {customers.map(customer => (
-                      <Option key={customer.id} value={customer.id}>
-                        {customer.full_name}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
+
+                {users.map(user => (
+
+                  <Option key={user.id} value={user.id}>
+
+                    {user.name}
+
+                  </Option>
+
+                ))}
+
+              </Select>
+
+            </Col>
+
+          </Row>
+
+          <Table
+
+            columns={columns}
+
+            dataSource={sales.filter(sale => {
+
+              const normalizedSearch = searchText.toLowerCase();
+
+              return (
+
+                (sale.customer_name || '').toLowerCase().includes(normalizedSearch) ||
+
+                (sale.seller_name || '').toLowerCase().includes(normalizedSearch) ||
+
+                sale.id.toString().includes(searchText)
+
+              );
+
+            })}
+
+            rowKey="id"
+
+            loading={loading}
+
+            pagination={false}
+
+            scroll={{ x: 'max-content' }}
+
+            size="small"
+
+            onRow={(record) => ({
+
+              onClick: () => {
+
+                setSelectedSale(record);
+
+                setDetailModalVisible(true);
+
+              },
+
+              style: { cursor: 'pointer' }
+
+            })}
+
+          />
+
+        </div>
+
+      ),
+
+    },
+
+    {
+
+      key: 'overdue-list',
+
+      label: (
+
+        <span>
+
+          <CalendarOutlined />
+
+          {t('sales.overdueSalesList', { defaultValue: 'Просроченные продажи' })}
+
+        </span>
+
+      ),
+
+      children: (
+
+        <div>
+
+          <Table
+
+            columns={[
+
+              {
+
+                title: '№',
+
+                key: 'rowNumber',
+
+                width: 60,
+
+                render: (_: unknown, __: any, index: number) => index + 1,
+
+              },
+
+              {
+
+                title: t('common.customer'),
+
+                dataIndex: 'customer_name',
+
+                key: 'customer_name',
+
+                ellipsis: true,
+
+              },
+
+              {
+
+                title: t('common.totalAmount'),
+
+                dataIndex: 'total_amount',
+
+                key: 'total_amount',
+
+                render: (amount: number) => (
+
+                  <span style={{ color: '#ff4d4f' }}>
+
+                    <DollarOutlined style={{ marginRight: 4 }} />
+
+                    {amount.toLocaleString()}
+
+                  </span>
+
+                ),
+
+              },
+
+              {
+
+                title: t('sales.debtDeadline', { defaultValue: 'Срок долга' }),
+
+                dataIndex: 'debt_deadline',
+
+                key: 'debt_deadline',
+
+                render: (date: string) => {
+
+                  const deadline = dayjs(date);
+
+                  const now = dayjs();
+
+                  const daysOverdue = now.diff(deadline, 'day');
+
+                  return (
+
+                    <span style={{ color: daysOverdue > 0 ? '#ff4d4f' : '#52c41a' }}>
+
+                      <CalendarOutlined style={{ marginRight: 4 }} />
+
+                      {deadline.format('DD.MM.YYYY')}
+
+                      {daysOverdue > 0 && (
+
+                        <Text style={{ marginLeft: 8, color: '#ff4d4f' }}>
+
+                          (+{daysOverdue} {t('common.days', { defaultValue: 'дней' })})
+
+                        </Text>
+
+                      )}
+
+                    </span>
+
+                  );
+
+                },
+
+              },
+
+              {
+
+                title: t('common.date'),
+
+                dataIndex: 'created_at',
+
+                key: 'created_at',
+
+                render: (date: string) => new Date(date).toLocaleDateString(),
+
+              },
+
+            ]}
+
+            dataSource={overdueSales}
+
+            rowKey="id"
+
+            loading={loadingOverdue}
+
+            pagination={false}
+
+            scroll={{ x: 'max-content' }}
+
+            size="small"
+
+            onRow={(record) => ({
+
+              onClick: () => {
+
+                setSelectedOverdueSale(null);
+
+                setOverdueDetailModalVisible(true);
+
+                loadOverdueSaleDetails(record.id);
+
+              },
+
+              style: { cursor: 'pointer' }
+
+            })}
+
+          />
+
+        </div>
+
+      ),
+
+    },
+
+    {
+
+      key: 'create',
+
+      label: (
+
+        <span>
+
+          <PlusOutlined />
+
+          {t('common.create', { defaultValue: 'Created' })}
+
+        </span>
+
+      ),
+
+      children: (
+
+        <Row justify="center">
+
+          <Col xs={24} sm={24} md={20} lg={16} xl={12}>
+
+            <Card>
+
+              <Title level={4} style={{ textAlign: 'center', marginBottom: 24 }}>
+
+                <ShoppingCartOutlined /> {t('sales.create')}
+
+              </Title>
+
+              <Form
+
+                form={form}
+
+                name="createSale"
+
+                onFinish={handleCreate}
+
+                autoComplete="off"
+
+                layout="vertical"
+
+                size="large"
+
+              >
 
                 <Form.Item
-                  name="payment_status"
-                  label={t('sales.paymentStatus', { defaultValue: 'Статус оплаты' })}
-                  rules={[{ required: true, message: t('sales.selectPaymentStatus', { defaultValue: 'Выберите статус оплаты' }) }]}
+
+                  name="customer_id"
+
+                  label={t('sales.customer')}
+
                 >
-                  <Select
-                    placeholder={t('sales.selectPaymentStatus')}
-                    value={paymentStatus}
-                    onChange={(value) => setPaymentStatus(value)}
-                  >
-                    <Option value="PAID">{t('sales.paid', { defaultValue: 'Оплачено' })}</Option>
-                    <Option value="PARTIAL">{t('sales.partial', { defaultValue: 'Частично' })}</Option>
-                    <Option value="DEBT">{t('sales.debt', { defaultValue: 'Долг' })}</Option>
+
+                  <Select placeholder={t('sales.selectCustomer', { defaultValue: 'Выберите клиента' })} prefix={<UserOutlined />}>
+
+                    {customers.map(customer => (
+
+                      <Option key={customer.id} value={customer.id}>
+
+                        {customer.full_name}
+
+                      </Option>
+
+                    ))}
+
                   </Select>
+
                 </Form.Item>
+
+
+
+                <Form.Item
+
+                  name="payment_status"
+
+                  label={t('sales.paymentStatus', { defaultValue: 'Статус оплаты' })}
+
+                  rules={[{ required: true, message: t('sales.selectPaymentStatus', { defaultValue: 'Выберите статус оплаты' }) }]}
+
+                >
+
+                  <Select
+
+                    placeholder={t('sales.selectPaymentStatus')}
+
+                    value={paymentStatus}
+
+                    onChange={(value) => setPaymentStatus(value)}
+
+                  >
+
+                    <Option value="PAID">{t('sales.paid', { defaultValue: 'Оплачено' })}</Option>
+
+                    <Option value="PARTIAL">{t('sales.partial', { defaultValue: 'Частично' })}</Option>
+
+                    <Option value="DEBT">{t('sales.debt', { defaultValue: 'Долг' })}</Option>
+
+                  </Select>
+
+                </Form.Item>
+
+
 
                 {(paymentStatus === 'DEBT' || paymentStatus === 'PARTIAL') && (
+
                   <Form.Item
+
                     name="debt_deadline"
+
                     label={t('sales.debtDeadline', { defaultValue: 'Срок долга' })}
+
                     rules={[{ required: true, message: t('sales.selectDebtDeadline', { defaultValue: 'Выберите срок долга' }) }]}
+
                   >
+
                     <DatePicker
+
                       placeholder={t('sales.selectDebtDeadline', { defaultValue: 'Выберите срок долга' })}
+
                       style={{ width: '100%' }}
+
                       format="YYYY-MM-DD"
+
                     />
+
                   </Form.Item>
+
                 )}
 
-                {(paymentStatus === 'PARTIAL' || paymentStatus === 'PAID') && (
-                  <Row gutter={16}>
-                    <Col span={12}>
-                      <Form.Item
-                        name="cash_amount"
-                        label={t('sales.cashAmount', { defaultValue: 'Наличные' })}
-                      >
-                        <InputNumber
-                          style={{ width: '100%' }}
-                          min={0}
-                          precision={2}
-                          placeholder={t('sales.enterCashAmount', { defaultValue: 'Сумма наличными' })}
-                        />
-                      </Form.Item>
-                    </Col>
-                    <Col span={12}>
-                      <Form.Item
-                        name="electronic_amount"
-                        label={t('sales.electronicAmount', { defaultValue: 'Электронные' })}
-                      >
-                        <InputNumber
-                          style={{ width: '100%' }}
-                          min={0}
-                          precision={2}
-                          placeholder={t('sales.enterElectronicAmount', { defaultValue: 'Сумма электронно' })}
-                        />
-                      </Form.Item>
-                    </Col>
-                  </Row>
+
+
+                {shouldShowDebtorSelect && (
+
+                  <Form.Item
+
+                    name="debtor_id"
+
+                    label={t('debtors.title', { defaultValue: 'Должник' })}
+
+                    rules={[{ required: true, message: 'Выберите должника' }]}
+
+                  >
+
+                    <Select
+
+                      showSearch
+
+                      placeholder="Выберите должника"
+
+                      optionFilterProp="label"
+
+                      onSearch={setDebtorSearchText}
+
+                      onChange={() => setDebtorSearchText('')}
+
+                      options={debtorOptions}
+
+                    />
+
+                  </Form.Item>
+
                 )}
+
+
+
+                {(paymentStatus === 'PARTIAL' || paymentStatus === 'PAID') && (
+
+                  <Row gutter={16}>
+
+                    <Col span={12}>
+
+                      <Form.Item
+
+                        name="cash_amount"
+
+                        label={t('sales.cashAmount', { defaultValue: 'Наличные' })}
+
+                      >
+
+                        <InputNumber
+
+                          style={{ width: '100%' }}
+
+                          min={0}
+
+                          precision={2}
+
+                          placeholder={t('sales.enterCashAmount', { defaultValue: 'Сумма наличными' })}
+
+                        />
+
+                      </Form.Item>
+
+                    </Col>
+
+                    <Col span={12}>
+
+                      <Form.Item
+
+                        name="electronic_amount"
+
+                        label={t('sales.electronicAmount', { defaultValue: 'Электронные' })}
+
+                      >
+
+                        <InputNumber
+
+                          style={{ width: '100%' }}
+
+                          min={0}
+
+                          precision={2}
+
+                          placeholder={t('sales.enterElectronicAmount', { defaultValue: 'Сумма электронно' })}
+
+                        />
+
+                      </Form.Item>
+
+                    </Col>
+
+                  </Row>
+
+                )}
+
+
 
                 
 
+
+
                 <Form.Item label={t('sales.items')}>
+
                   
+
                                     
+
                   {getGroupedSaleItems().map((group) => (
+
                     <Card
+
                       key={group.productId}
+
                       size="small"
+
                       style={{ marginBottom: 16 }}
+
                     >
+
                                             
+
                       {/* Поля редактирования для каждой строки */}
+
                       {group.items.map((item, itemIndex) => {
+
                         const globalIndex = saleItems.indexOf(item);
+
                         const isFirstItem = itemIndex === 0;
+
                         return (
+
                           <div key={globalIndex} style={{ marginBottom: 8 }}>
+
                             {/* Первая строка - выбор товара (только для первой строки) */}
+
                             {isFirstItem && (
+
                               <Row style={{ marginBottom: 8 }}>
+
                                 <Col span={24}>
+
                                   <Form.Item
+
                                     required
+
                                     style={{ marginBottom: 0 }}
+
                                   >
+
                                     <Select
+
                                       placeholder={t('sales.selectProduct', { defaultValue: 'Choose product' })}
+
                                       value={item.product_id || undefined}
+
                                       onChange={(value) => updateSaleItem(globalIndex, 'product_id', value)}
+
                                       showSearch
+
                                       filterOption={(input, option) => {
+
                                         const productId = option?.value as number;
+
                                         const product = products.find(p => p.id === productId);
+
                                         return product?.name.toLowerCase().includes(input.toLowerCase()) || false;
+
                                       }}
+
                                     >
+
                                       {products.map(product => (
+
                                         <Option key={product.id} value={product.id}>
+
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
                                             <span>{product.name}</span>
+
                                             <span style={{ 
+
                                               color: product.stock_quantity <= 10 ? '#ff4d4f' : product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
+
                                               fontWeight: product.stock_quantity <= 10 ? 'bold' : 'normal',
+
                                               fontSize: '12px'
+
                                             }}>
+
                                               Stock: {product.stock_quantity}
+
                                             </span>
+
                                           </div>
+
                                         </Option>
+
                                       ))}
+
                                     </Select>
+
                                   </Form.Item>
+
                                 </Col>
+
                               </Row>
+
                             )}
+
                             
+
                             {/* Выбор партии и цена для всего продукта */}
+
                             {isFirstItem && (
+
                               <Row gutter={8} style={{ marginBottom: 8 }}>
+
                                 {group.product?.type === 'batch' && (
+
                                   <Col flex="1">
+
                                     <Form.Item style={{ marginBottom: 0 }}>
+
                                       <Select
+
                                         placeholder={t('sales.batch')}
+
                                         value={group.stock_item_id}
+
                                         onChange={(value) => updateProductGroupBatch(group.productId, value)}
+
                                         loading={loadingStockItems[group.productId]}
+
                                         allowClear
+
                                         style={{ width: '100%' }}
+
                                       >
+
                                         {(productStockItems[group.productId] || []).map(si => (
+
                                           <Option key={si.id} value={si.id}>
+
                                             {si.batch_code} ({t('sales.remaining')} {si.quantity}) - {si.selling_price ? si.selling_price.toLocaleString() : '0'} TJS
+
                                           </Option>
+
                                         ))}
+
                                       </Select>
+
                                     </Form.Item>
+
                                   </Col>
+
                                 )}
+
                                 <Col flex="1">
+
                                   <Form.Item style={{ marginBottom: 0 }}>
+
                                     <InputNumber
+
                                       placeholder={t('common.price')}
+
                                       min={0}
+
                                       step={0.01}
+
                                       value={group.items[0]?.unit_price || group.product?.selling_price || undefined}
+
                                       onChange={(value) => {
+
                                         // Update price for all items in this group
+
                                         setSaleItems(prev => prev.map(item => {
+
                                           if (item.product_id === group.productId) {
+
                                             return { ...item, unit_price: value || 0 };
+
                                           }
+
                                           return item;
+
                                         }));
+
                                       }}
+
                                       style={{ width: '100%' }}
+
                                     />
+
                                   </Form.Item>
+
                                 </Col>
+
                               </Row>
+
                             )}
+
                             
+
                             {/* Вторая строка - остальные поля */}
+
                             <Row gutter={8} align="middle">
+
                               <Col flex="120px">
+
                                 <Form.Item style={{ marginBottom: 0 }}>
+
                                   <Select
+
                                     placeholder={t('sales.style')}
+
                                     value={item.style_id}
+
                                     onChange={(value) => updateSaleItem(globalIndex, 'style_id', value)}
+
                                     allowClear
+
                                   >
+
                                     {styles.map(style => (
+
                                       <Option key={style.id} value={style.id}>
+
                                         {style.name}
+
                                       </Option>
+
                                     ))}
+
                                   </Select>
+
                                 </Form.Item>
+
                               </Col>
+
                               <Col flex="80px">
+
                                 <Form.Item
+
                                   required
+
                                   style={{ marginBottom: 0 }}
+
                                 >
+
                                   <InputNumber
+
                                     placeholder="Штук"
+
                                     min={1}
+
                                     value={item.quantity || undefined}
+
                                     onChange={(value) => updateSaleItem(globalIndex, 'quantity', value)}
+
                                     style={{ width: '100%' }}
+
                                   />
+
                                 </Form.Item>
+
                               </Col>
+
                               <Col flex="80px">
+
                                 <Form.Item
+
                                   style={{ marginBottom: 0 }}
+
                                 >
+
                                   <InputNumber
+
                                     placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'Количество' })}
+
                                     min={0.1}
+
                                     step={0.1}
+
                                     value={item.unit_value || undefined}
+
                                     onChange={(value) => updateSaleItem(globalIndex, 'unit_value', value)}
+
                                     style={{ width: '100%' }}
+
                                   />
+
                                 </Form.Item>
+
                               </Col>
+
                                                             <Col flex="120px">
+
                                 <Form.Item
+
                                   style={{ marginBottom: 0 }}
+
                                 >
+
                                   <InputNumber
+
                                     placeholder="Сумма"
+
                                     value={item.quantity * item.unit_price * (item.unit_value || 1.0)}
+
                                     disabled
+
                                     style={{ width: '100%', backgroundColor: '#f5f5f5' }}
+
                                   />
+
                                 </Form.Item>
+
                               </Col>
+
                               <Col flex="40px">
+
                                 <Button
+
                                   type="text"
+
                                   danger
+
                                   icon={<DeleteOutlined />}
+
                                   onClick={() => removeSaleItem(globalIndex)}
+
                                 />
+
                               </Col>
+
                             </Row>
+
                           </div>
+
                         );
+
                       })}
+
                       
+
                       {/* Кнопка добавления строки для этого товара */}
+
                       <Button
+
                         type="dashed"
+
                         size="small"
+
                         onClick={() => {
+
                           const newItem: CreateSaleItemLocal = {
+
                             product_id: group.productId,
+
                             quantity: 0,
+
                             unit_price: group.items[0]?.unit_price || group.product?.selling_price || 0,
+
                             unit_value: 0,
+
                             stock_item_id: group.stock_item_id,
+
                             style_id: undefined,
+
                           };
+
                           setSaleItems([...saleItems, newItem]);
+
                         }}
+
                         style={{ width: '100%' }}
+
                       >
+
                         + {t('sales.addRowForProduct')}
+
                       </Button>
+
                       
+
                       {/* Детальная информация об итогах */}
+
                       {group.items.length > 0 && (
+
                         <div style={{ 
+
                           marginTop: 12, 
+
                           padding: '8px 12px', 
+
                           backgroundColor: '#f8f9fa', 
+
                           borderRadius: '4px',
+
                           border: '1px solid #e9ecef',
+
                           fontSize: '12px', 
+
                           fontWeight: 'bold', 
+
                           color: '#333'
+
                         }}>
+
                           Итог: {group.items.reduce((sum, item) => sum + (item.quantity * (item.unit_value || 1.0)), 0)}м × {group.items[0]?.unit_price || 0} = {group.totalPrice.toLocaleString()} TJS
+
                         </div>
+
                       )}
+
                     </Card>
+
                   ))}
+
                 </Form.Item>
+
+
 
                 <div style={{ marginBottom: 16 }}>
+
                   <Button
+
                     type="dashed"
+
                     onClick={addSaleItem}
+
                     icon={<PlusOutlined />}
+
                     block
+
                   >
+
                     {t('sales.addItem', { defaultValue: 'Добавить позицию' })}
+
                   </Button>
+
                 </div>
+
+
 
                 <div style={{ textAlign: 'right', fontSize: 18, fontWeight: 'bold', marginBottom: 24 }}>
+
                   {t('common.total')}: {saleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+
                 </div>
+
+
 
                 <Form.Item style={{ marginTop: 24 }}>
+
                   <Button
+
                     type="primary"
+
                     htmlType="submit"
+
                     loading={creating}
+
                     icon={<SaveOutlined />}
+
                     block
+
                     size="large"
+
                   >
+
                     {t('sales.createSale', { defaultValue: 'Создать продажу' })}
+
                   </Button>
+
                 </Form.Item>
+
               </Form>
+
             </Card>
+
           </Col>
+
         </Row>
+
       ),
+
     },
+
   ];
 
+
+
   return (
+
     <div>
+
       <Title level={3} style={{ marginTop: 0, marginBottom: 16 }}>{t('sales.title')}</Title>
+
       <Tabs
+
         activeKey={activeTab}
+
         onChange={setActiveTab}
+
         items={tabItems}
+
       />
 
+
+
       <Modal
+
         title={false}
+
         open={detailModalVisible}
+
         onCancel={() => setDetailModalVisible(false)}
+
         footer={null}
+
         width={800}
+
       >
+
         {selectedSale && (
+
           <div>
+
             <Row gutter={16} style={{ marginBottom: 16 }}>
+
               <Col span={6}>
+
                 <Tag color="blue" icon={<CalendarOutlined />}>
+
                   {new Date(selectedSale.created_at).toLocaleDateString()}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color="green" icon={<UserOutlined />}>
+
                   {selectedSale.customer_name}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color="orange" icon={<DollarOutlined />}>
+
                   {t('common.total')}: {(parseFloat(selectedSale.total_amount) || 0).toLocaleString()}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 {(parseFloat(selectedSale.discount) || 0) > 0 && (
+
                   <Tag color="red" icon={<DollarOutlined />}>
+
                     {t('sales.discount', { defaultValue: 'Скидка' })}: {(parseFloat(selectedSale.discount) || 0).toLocaleString()}
+
                   </Tag>
+
                 )}
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color={selectedSale.payment_status === 'PAID' ? 'green' : selectedSale.payment_status === 'PARTIAL' ? 'blue' : 'orange'}>
+
                   {selectedSale.payment_status === 'PAID' ? t('sales.paid', { defaultValue: 'Оплачено' }) : selectedSale.payment_status === 'PARTIAL' ? t('sales.partial', { defaultValue: 'Частично' }) : t('sales.debt', { defaultValue: 'Долг' })}
+
                 </Tag>
+
               </Col>
+
             </Row>
+
             
+
             {selectedSale.payment_status === 'PARTIAL' && ((parseFloat(selectedSale.cash_amount) || 0) > 0 || (parseFloat(selectedSale.electronic_amount) || 0) > 0) && (
+
               <Row gutter={16} style={{ marginBottom: 16 }}>
+
                 <Col span={8}>
+
                   <Card size="small">
+
                     <Statistic
+
                       title={t('sales.cashAmount', { defaultValue: 'Наличные' })}
+
                       value={parseFloat(selectedSale.cash_amount) || 0}
+
                       precision={2}
+
                       valueStyle={{ color: '#52c41a' }}
+
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
+
                     />
+
                   </Card>
+
                 </Col>
+
                 <Col span={8}>
+
                   <Card size="small">
+
                     <Statistic
+
                       title={t('sales.electronicAmount', { defaultValue: 'Электронные' })}
+
                       value={parseFloat(selectedSale.electronic_amount) || 0}
+
                       precision={2}
+
                       valueStyle={{ color: '#1890ff' }}
+
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
+
                     />
+
                   </Card>
+
                 </Col>
+
                 <Col span={8}>
+
                   <Card size="small">
+
                     <Statistic
+
                       title={t('sales.remainingAmount', { defaultValue: 'Осталось к оплате' })}
+
                       value={(parseFloat(selectedSale.total_amount) || 0) - ((parseFloat(selectedSale.cash_amount) || 0) + (parseFloat(selectedSale.electronic_amount) || 0))}
+
                       precision={2}
+
                       valueStyle={{ color: '#ff4d4f' }}
+
                       suffix={t('common.currency', { defaultValue: 'TJS' })}
+
                     />
+
                   </Card>
+
                 </Col>
+
               </Row>
+
             )}
+
             
+
             {loadingSaleDetails ? (
+
               <div style={{ textAlign: 'center', padding: 20 }}>
+
                 <Spin size="large" />
+
                 <div style={{ marginTop: 8 }}>{t('common.loading')}...</div>
+
               </div>
+
             ) : (
+
               <Table
+
                 columns={itemColumns}
+
                 dataSource={selectedSale.items || []}
+
                 rowKey="id"
+
                 pagination={false}
+
                 scroll={{ x: 'max-content' }}
+
                 size="small"
+
               />
+
             )}
+
           </div>
+
         )}
+
       </Modal>
 
+
+
       <Modal
+
         title={`${t('sales.overdueSale', { defaultValue: 'Просроченная продажа' })} #${selectedOverdueSale?.id} - ${t('common.details')}`}
+
         open={overdueDetailModalVisible}
+
         onCancel={() => setOverdueDetailModalVisible(false)}
+
         footer={null}
+
         width={800}
+
       >
+
         {selectedOverdueSale && (
+
           <div>
+
             <Row gutter={16} style={{ marginBottom: 16 }}>
+
               <Col span={6}>
+
                 <Tag color="blue" icon={<CalendarOutlined />}>
+
                   {new Date(selectedOverdueSale.created_at).toLocaleDateString()}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color="green" icon={<UserOutlined />}>
+
                   {selectedOverdueSale.customer_name}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color="red" icon={<DollarOutlined />}>
+
                   {t('common.total')}: {selectedOverdueSale.total_amount.toLocaleString()}
+
                 </Tag>
+
               </Col>
+
               <Col span={6}>
+
                 <Tag color="red">
+
                   {t('sales.debt', { defaultValue: 'Долг' })}
+
                 </Tag>
+
               </Col>
+
             </Row>
+
             
+
             {selectedOverdueSale.debt_deadline && (
+
               <Row gutter={16} style={{ marginBottom: 16 }}>
+
                 <Col span={12}>
+
                   <Tag color="orange" icon={<CalendarOutlined />}>
+
                     {t('sales.debtDeadline', { defaultValue: 'Срок долга' })}: {new Date(selectedOverdueSale.debt_deadline).toLocaleDateString()}
+
                   </Tag>
+
                 </Col>
+
                 <Col span={12}>
+
                   {(() => {
+
                     const deadline = dayjs(selectedOverdueSale.debt_deadline);
+
                     const now = dayjs();
+
                     const daysOverdue = now.diff(deadline, 'day');
+
                     return (
+
                       <Tag color={daysOverdue > 0 ? 'red' : 'green'}>
+
                         {daysOverdue > 0 ? `+${daysOverdue} ${t('common.days', { defaultValue: 'дней' })} просрочки` : 'Не просрочено'}
+
                       </Tag>
+
                     );
+
                   })()}
+
                 </Col>
+
               </Row>
+
             )}
+
             
+
             {loadingOverdueDetails ? (
+
               <div style={{ textAlign: 'center', padding: 20 }}>
+
                 <Spin size="large" />
+
                 <div style={{ marginTop: 8 }}>{t('common.loading')}...</div>
+
               </div>
+
             ) : (
+
               <Table
+
                 columns={itemColumns}
+
                 dataSource={selectedOverdueSale.items || []}
+
                 rowKey="id"
+
                 pagination={false}
+
                 scroll={{ x: 'max-content' }}
+
                 size="small"
+
               />
+
             )}
+
           </div>
+
         )}
+
       </Modal>
 
+
+
       <Modal
+
         title={t('sales.stockErrorTitle', { defaultValue: 'Недостаточно товара на складе' })}
+
         open={stockErrorModal.visible}
+
         onCancel={() => setStockErrorModal({ visible: false, productName: '' })}
+
         footer={[
+
           <Button key="ok" type="primary" onClick={() => setStockErrorModal({ visible: false, productName: '' })}>
+
             {t('common.ok', { defaultValue: 'Понятно' })}
+
           </Button>
+
         ]}
+
         width={400}
+
       >
+
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
+
           <div style={{ fontSize: 16, marginBottom: 16 }}>
+
             <span style={{ color: '#ff4d4f', fontSize: 24 }}>⚠️</span>
+
           </div>
+
           <p style={{ fontSize: 16, lineHeight: 1.5 }}>
+
             {t('sales.stockErrorMessage', { defaultValue: `Недостаточно товара "${stockErrorModal.productName}" на складе.` })}
+
           </p>
+
           <p style={{ fontSize: 14, color: '#666', marginTop: 12 }}>
+
             {t('sales.stockErrorHint', { defaultValue: 'Пожалуйста, проверьте остатки или пополните склад через приходы.' })}
+
           </p>
+
         </div>
+
       </Modal>
 
+
+
       <Modal
+
         title={t('sales.edit')}
+
         open={editModalVisible}
+
         onCancel={() => {
+
           setEditModalVisible(false);
+
           setEditingSale(null);
+
           setEditSaleItems([]);
+
           setEditProductGroups([]);
+
           form.resetFields();
+
         }}
+
         footer={[
+
           <Button key="cancel" onClick={() => {
+
             setEditModalVisible(false);
+
             setEditingSale(null);
+
             setEditSaleItems([]);
+
             setEditProductGroups([]);
+
             form.resetFields();
+
           }}>
+
             Отмена
+
           </Button>,
+
           <Button key="submit" type="primary" onClick={() => form.submit()} loading={editing}>
+
             Обновить
+
           </Button>,
+
         ]}
+
         width={800}
+
       >
+
         <Spin spinning={loadingSaleDetails}>
+
           <Form
+
             form={form}
+
             name="editSale"
+
             onFinish={handleUpdate}
+
             autoComplete="off"
+
             layout="vertical"
+
             size="large"
+
           >
+
             <Form.Item
+
               label={t('sales.customer')}
+
               name="customer_id"
+
             >
+
               <Select placeholder={t('sales.selectCustomer', { defaultValue: 'Выберите клиента' })} prefix={<UserOutlined />}>
+
                 {customers.map(customer => (
+
                   <Option key={customer.id} value={customer.id}>
+
                     {customer.full_name}
+
                   </Option>
+
                 ))}
+
               </Select>
+
             </Form.Item>
 
+
+
             <Form.Item
+
               label={t('sales.paymentStatus', { defaultValue: 'Payment Status' })}
+
               name="payment_status"
+
               rules={[{ required: true, message: t('sales.selectPaymentStatus', { defaultValue: 'Choose payment status' }) }]}
+
             >
+
               <Select placeholder={t('sales.selectPaymentStatus')}>
+
                 <Option value="PAID">{t('sales.paid', { defaultValue: 'Оплачено' })}</Option>
+
                 <Option value="PARTIAL">{t('sales.partial', { defaultValue: 'Частично' })}</Option>
+
                 <Option value="DEBT">{t('sales.debt', { defaultValue: 'В долг' })}</Option>
+
               </Select>
+
             </Form.Item>
 
+
+
             <Form.Item
+
               noStyle
+
               shouldUpdate={(prevValues, currentValues) => prevValues.payment_status !== currentValues.payment_status}
+
             >
+
               {({ getFieldValue }) => {
+
                 const paymentStatus = getFieldValue('payment_status');
+
                 if (paymentStatus === 'PAID' || paymentStatus === 'PARTIAL') {
+
                   return (
+
                     <Row gutter={16}>
+
                       <Col span={12}>
+
                         <Form.Item
+
                           label={t('sales.cashAmount', { defaultValue: 'Наличные' })}
+
                           name="cash_amount"
+
                         >
+
                           <InputNumber
+
                             placeholder={t('sales.cashAmountPlaceholder', { defaultValue: 'Сумма наличными' })}
+
                             min={0}
+
                             step={0.01}
+
                             style={{ width: '100%' }}
+
                           />
+
                         </Form.Item>
+
                       </Col>
+
                       <Col span={12}>
+
                         <Form.Item
+
                           label={t('sales.electronicAmount', { defaultValue: 'Электронные' })}
+
                           name="electronic_amount"
+
                         >
+
                           <InputNumber
+
                             placeholder={t('sales.electronicAmountPlaceholder', { defaultValue: 'Сумма электронными' })}
+
                             min={0}
+
                             step={0.01}
+
                             style={{ width: '100%' }}
+
                           />
+
                         </Form.Item>
+
                       </Col>
+
                     </Row>
+
                   );
+
                 }
+
                 return null;
+
               }}
+
             </Form.Item>
 
+
+
             <Form.Item
+
               noStyle
+
               shouldUpdate={(prevValues, currentValues) => prevValues.payment_status !== currentValues.payment_status}
+
             >
+
               {({ getFieldValue }) => {
+
                 const paymentStatus = getFieldValue('payment_status');
+
                 if (paymentStatus === 'DEBT' || paymentStatus === 'PARTIAL') {
+
                   return (
+
                     <Form.Item
+
                       label={t('sales.debtDeadline', { defaultValue: 'Срок долга' })}
+
                       name="debt_deadline"
+
                     >
+
                       <DatePicker
+
                         placeholder={t('sales.selectDebtDeadline', { defaultValue: 'Выберите срок долга' })}
+
                         style={{ width: '100%' }}
+
                       />
+
                     </Form.Item>
+
                   );
+
                 }
+
                 return null;
+
               }}
+
             </Form.Item>
+
+
 
             <div style={{ marginBottom: 16 }}>
+
               <Title level={5}>{t('sales.items')}</Title>
+
               
+
               {editSaleItems.length > 0 && (
+
                 <div style={{ marginBottom: 8 }}>
+
                   <Row gutter={8} align="middle">
+
                     <Col flex="auto">
+
                       <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                         {t('common.product')}
+
                       </Text>
+
                     </Col>
+
                     <Col flex="80px">
+
                       <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                         {t('common.quantity')}
+
                       </Text>
+
                     </Col>
+
                     <Col flex="80px">
+
                       <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                         {t('sales.unitValue', { defaultValue: 'Количество' })}
+
                       </Text>
+
                     </Col>
+
                     <Col flex="120px">
+
                       <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                         {t('sales.unitPrice')}
+
                       </Text>
+
                     </Col>
+
                     <Col flex="120px">
+
                       <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                         Сумма
+
                       </Text>
+
                     </Col>
+
                     <Col flex="40px">
+
                     </Col>
+
                   </Row>
+
                 </div>
+
               )}
+
               
+
               {getGroupedEditSaleItems().map((group) => (
+
                 <Card
+
                   key={group.productId}
+
                   size="small"
+
                   style={{ marginBottom: 16 }}
+
                   title={
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
                       <div>
+
                         <span style={{ fontWeight: 'bold', display: 'block' }}>
+
                           {group.product?.name || (group.productId > 0 ? `Product #${group.productId}` : '')}
+
                         </span>
+
                         {group.product && (
+
                           <span style={{ 
+
                             fontSize: '11px', 
+
                             color: group.product.stock_quantity <= 10 ? '#ff4d4f' : group.product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
+
                             fontWeight: group.product.stock_quantity <= 10 ? 'bold' : 'normal'
+
                           }}>
+
                             Stock: {group.product.stock_quantity}
+
                           </span>
+
                         )}
+
                       </div>
+
                       <div style={{ textAlign: 'right' }}>
+
                         <div style={{ fontSize: '12px', color: '#666' }}>
+
                           Итого: {group.totalMeters.toFixed(2)} м × {group.product?.selling_price || 0} = {group.totalPrice.toLocaleString()} TJS
+
                         </div>
+
                       </div>
+
                     </div>
+
                   }
+
                 >
+
                   {/* Список строк товара */}
+
                   <div style={{ marginBottom: 12 }}>
+
                     <Text strong style={{ fontSize: '12px', color: '#666' }}>
+
                       Строки: {group.items.map((item) => 
+
                         `${item.quantity}×${(Number(item.unit_value) || 1.0).toFixed(1)}`
+
                       ).join(', ')}
+
                     </Text>
+
                   </div>
+
                   
+
                   {/* Поля редактирования для каждой строки */}
+
                   {group.items.map((item, itemIndex) => {
+
                     const globalIndex = editSaleItems.indexOf(item);
+
                     const isFirstItem = itemIndex === 0;
+
                     return (
+
                       <div key={globalIndex} style={{ marginBottom: 8 }}>
+
                         {/* Первая строка - выбор товара (только для первой строки) */}
+
                         {isFirstItem && (
+
                           <Row style={{ marginBottom: 8 }}>
+
                             <Col span={24}>
+
                               <Form.Item
+
                                 required
+
                                 style={{ marginBottom: 0 }}
+
                               >
+
                                 <Select
+
                                   placeholder={t('sales.selectProduct', { defaultValue: 'Choose product' })}
+
                                   value={item.product_id || undefined}
+
                                   onChange={(value) => updateEditSaleItem(globalIndex, 'product_id', value)}
+
                                   showSearch
+
                                   filterOption={(input, option) => {
+
                                     const productId = option?.value as number;
+
                                     const product = products.find(p => p.id === productId);
+
                                     return product?.name.toLowerCase().includes(input.toLowerCase()) || false;
+
                                   }}
+
                                 >
+
                                   {products.map(product => (
+
                                     <Option key={product.id} value={product.id}>
+
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
                                         <span>{product.name}</span>
+
                                         <span style={{ 
+
                                           color: product.stock_quantity <= 10 ? '#ff4d4f' : product.stock_quantity <= 50 ? '#faad14' : '#52c41a',
+
                                           fontWeight: product.stock_quantity <= 10 ? 'bold' : 'normal',
+
                                           fontSize: '12px'
+
                                         }}>
+
                                           Stock: {product.stock_quantity}
+
                                         </span>
+
                                       </div>
+
                                     </Option>
+
                                   ))}
+
                                 </Select>
+
                               </Form.Item>
+
                             </Col>
+
                           </Row>
+
                         )}
+
                         
+
                         {/* Выбор партии для batch товаров - после выбора товара */}
+
                         {isFirstItem && group.product?.type === 'batch' && (
+
                           <Row style={{ marginBottom: 8 }}>
+
                             <Col span={24}>
+
                               <Form.Item style={{ marginBottom: 0 }}>
+
                                 <Select
+
                                   placeholder={t('sales.batch')}
+
                                   value={group.stock_item_id}
+
                                   onChange={(value) => updateEditProductGroupBatch(group.productId, value)}
+
                                   loading={loadingStockItems[group.productId]}
+
                                   allowClear
+
                                   style={{ width: '100%' }}
+
                                 >
+
                                   {(productStockItems[group.productId] || []).map(si => (
+
                                     <Option key={si.id} value={si.id}>
+
                                       {si.batch_code} ({t('sales.remaining')} {si.quantity}) - {si.selling_price ? si.selling_price.toLocaleString() : '0'} TJS
+
                                     </Option>
+
                                   ))}
+
                                 </Select>
+
                               </Form.Item>
+
                             </Col>
+
                           </Row>
+
                         )}
+
                         
+
                         {/* Вторая строка - остальные поля */}
+
                         <Row gutter={8} align="middle">
+
                           <Col flex="80px">
+
                             <InputNumber
+
                               placeholder={t('sales.quantityPlaceholder', { defaultValue: 'Штук' })}
+
                               min={1}
+
                               value={item.quantity}
+
                               onChange={(value) => updateEditSaleItem(globalIndex, 'quantity', value || 1)}
+
                               style={{ width: '100%' }}
+
                             />
+
                           </Col>
+
                           <Col flex="80px">
+
                             <InputNumber
+
                               placeholder={t('sales.unitValuePlaceholder', { defaultValue: 'Количество' })}
+
                               min={0.1}
+
                               step={0.1}
+
                               value={item.unit_value || 1.0}
+
                               onChange={(value) => updateEditSaleItem(globalIndex, 'unit_value', value || 1.0)}
+
                               style={{ width: '100%' }}
+
                             />
+
                           </Col>
+
                           <Col flex="120px">
+
                             <InputNumber
+
                               placeholder={t('common.price')}
+
                               min={0.01}
+
                               step={0.01}
+
                               value={item.unit_price}
+
                               onChange={(value) => updateEditSaleItem(globalIndex, 'unit_price', value || 0)}
+
                               style={{ width: '100%' }}
+
                             />
+
                           </Col>
+
                           <Col flex="120px">
+
                             <InputNumber
+
                               placeholder="Сумма"
+
                               value={item.quantity * item.unit_price * (item.unit_value || 1.0)}
+
                               disabled
+
                               style={{ width: '100%', backgroundColor: '#f5f5f5' }}
+
                             />
+
                           </Col>
+
                           <Col flex="40px">
+
                             <Button
+
                               danger
+
                               icon={<DeleteOutlined />}
+
                               onClick={() => {
+
                                 setEditSaleItems(editSaleItems.filter((_, i) => i !== globalIndex));
+
                               }}
+
                             />
+
                           </Col>
+
                         </Row>
+
                       </div>
+
                     );
+
                   })}
+
                   
+
                   {/* Кнопка добавления строки для этого товара */}
+
                   <Button
+
                     type="dashed"
+
                     size="small"
+
                     onClick={() => {
+
                       const newItem: UpdateSaleItem = {
+
                         product_id: group.productId,
+
                         quantity: 1,
+
                         unit_price: group.product?.selling_price || 0,
+
                         unit_value: 1.0,
+
                         stock_item_id: group.stock_item_id,
+
                       };
+
                       setEditSaleItems([...editSaleItems, newItem]);
+
                     }}
+
                     style={{ width: '100%' }}
+
                   >
+
                     + {t('sales.addRowForProduct')}
+
                   </Button>
+
                   
+
                   {/* Детальная информация об итогах */}
+
                   {group.items.length > 0 && (
+
                     <div style={{ 
+
                       marginTop: 12, 
+
                       padding: '8px 12px', 
+
                       backgroundColor: '#f8f9fa', 
+
                       borderRadius: '4px',
+
                       border: '1px solid #e9ecef'
+
                     }}>
+
                       <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
+
                         {group.items.map((item, index) => (
+
                           <div key={index}>
+
                             {item.quantity}шт × {item.unit_price} × {(Number(item.unit_value) || 1.0).toFixed(1)}м = {(item.quantity * item.unit_price * (Number(item.unit_value) || 1.0)).toFixed(1)} TJS
+
                           </div>
+
                         ))}
+
                       </div>
+
                       <div style={{ 
+
                         fontSize: '12px', 
+
                         fontWeight: 'bold', 
+
                         color: '#333',
+
                         borderTop: '1px solid #dee2e6',
+
                         paddingTop: '4px',
+
                         marginTop: '4px'
+
                       }}>
+
                         Итог: ({group.items.reduce((sum, item) => sum + (item.quantity * (Number(item.unit_value) || 1.0)), 0).toFixed(1)}м) × {group.product?.selling_price || 0} = {group.totalPrice.toLocaleString()} TJS
+
                       </div>
+
                     </div>
+
                   )}
+
                 </Card>
+
               ))}
+
               
+
               <Button
+
                 type="dashed"
+
                 onClick={() => {
+
                   setEditSaleItems([...editSaleItems, { product_id: 0, quantity: 1, unit_price: 0, unit_value: 1.0, stock_item_id: undefined }]);
+
                 }}
+
                 icon={<PlusOutlined />}
+
                 style={{ width: '100%', marginTop: 8 }}
+
               >
+
                 {t('sales.addProduct', { defaultValue: 'Добавить товар' })}
+
               </Button>
+
             </div>
+
+
 
             <div style={{ textAlign: 'right', fontSize: 18, fontWeight: 'bold' }}>
+
               {t('common.total', { defaultValue: 'Итого' })}: {editSaleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+
             </div>
+
           </Form>
+
         </Spin>
+
       </Modal>
+
+
 
       {/* Receipt Modal */}
+
       <Modal
+
         title={false}
+
         open={receiptModalVisible}
+
         onCancel={() => {
+
           setReceiptModalVisible(false);
+
           setSelectedReceiptSale(null);
+
         }}
+
         footer={[
+
           <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={handlePrintReceipt}>
+
             {t('common.print', { defaultValue: 'Print' })}
+
           </Button>,
+
           <Button key="close" onClick={() => {
+
             setReceiptModalVisible(false);
+
             setSelectedReceiptSale(null);
+
           }}>
+
             {t('common.close')}
+
           </Button>
+
         ]}
+
         width={'fit-content'}
+
         className="receipt-modal"
+
       >
+
         {selectedReceiptSale && (
+
           <div className="receipt-content">
+
             {loadingSaleDetails ? (
+
               <div style={{ textAlign: 'center', padding: 40 }}>
+
                 <Spin size="large" />
+
                 <div style={{ marginTop: 8, fontFamily: 'Arial, sans-serif' }}>{t('common.loading')}...</div>
+
               </div>
+
             ) : (
+
               <>
+
                 {/* Receipt Items */}
+
                 <div style={{ marginBottom: 20 }}>
+
                   {selectedReceiptSale.items && selectedReceiptSale.items.length > 0 ? (
+
                     (() => {
+
                       // Group items by product name
+
                       const grouped = selectedReceiptSale.items.reduce((acc, item) => {
+
                         if (!acc[item.product_name]) {
+
                           acc[item.product_name] = [];
+
                         }
+
                         acc[item.product_name].push(item);
+
                         return acc;
+
                       }, {} as Record<string, typeof selectedReceiptSale.items>);
 
+
+
                       return Object.entries(grouped).map(([productName, items]) => (
+
                         <div key={productName} style={{ marginBottom: 12 }}>
+
                           <div style={{
+
                             fontWeight: 600,
+
                             color: '#222',
+
                             marginBottom: 4,
+
                             textAlign: 'center'
+
                           }}>
+
                             {productName}
+
                           </div>
+
                           {items.map((item, idx) => (
+
                             <div key={idx} style={{
+
                               textAlign: 'left',
+
                               color: '#666',
+
                               fontSize: '16px',
+
                               marginBottom: 2
+
                             }}>
+
                               {parseFloat(item.quantity.toString()).toString()}{item.unit_value ? `×${parseFloat(item.unit_value.toString()).toString()}м` : ''} {item.style_name ? `(${item.style_name})` : ''} × {parseFloat(item.unit_price.toString()).toString()} смн = {(item.quantity * item.unit_price * (item.unit_value || 1.0)).toLocaleString()} смн
+
                             </div>
+
                           ))}
+
                         </div>
+
                       ));
+
                     })()
+
                   ) : (
+
                     <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
+
                       {t('sales.noItems', { defaultValue: 'No items in this sale' })}
+
                     </div>
+
                   )}
+
                 </div>
+
+
 
                 {/* Receipt Total */}
+
                 <div style={{ 
+
                   textAlign: 'center', 
+
                   marginTop: 20, 
+
                   fontSize: '20px', 
+
                   fontWeight: 600, 
+
                   color: '#222' 
+
                 }}>
+
                   {t('common.totalAmount', { defaultValue: 'Total Amount' })}: {selectedReceiptSale.total_amount.toLocaleString()}
+
                 </div>
 
+
+
                 {/* Discount Display */}
+
                 {(parseFloat(selectedReceiptSale.discount) || 0) > 0 && (
+
                   <div style={{ 
+
                     textAlign: 'center', 
+
                     marginTop: 10, 
+
                     fontSize: '18px', 
+
                     fontWeight: 500, 
+
                     color: '#ff4d4f' 
+
                   }}>
+
                     {t('sales.discount', { defaultValue: 'Скидка' })}: {parseFloat(selectedReceiptSale.discount).toLocaleString()}
+
                   </div>
+
                 )}
+
               </>
+
             )}
+
           </div>
+
         )}
+
       </Modal>
+
+
 
       {/* Stage History Modal */}
+
       <Modal
+
         title={`${t('sales.stageHistory', { defaultValue: 'История этапов' })} ${selectedSaleForStage ? `#${selectedSaleForStage.id}` : ''}`}
+
         open={stageHistoryModalVisible}
+
         onCancel={() => setStageHistoryModalVisible(false)}
+
         footer={[
+
           <Button key="close" onClick={() => setStageHistoryModalVisible(false)}>
+
             {t('common.close', { defaultValue: 'Закрыть' })}
+
           </Button>,
+
         ]}
+
         width={600}
+
       >
+
         {loadingStageHistory ? (
+
           <div style={{ textAlign: 'center', padding: 20 }}>
+
             <Spin size="large" />
+
           </div>
+
         ) : stageHistory.length === 0 ? (
+
           <div style={{ textAlign: 'center', padding: 20, color: '#8c8c8c' }}>
+
             {t('sales.noStageHistory', { defaultValue: 'Нет истории изменений этапов' })}
+
           </div>
+
         ) : (
+
           <Table
+
             dataSource={stageHistory}
+
             rowKey="id"
+
             size="small"
+
             pagination={false}
+
             columns={[
+
               {
+
                 title: t('common.date', { defaultValue: 'Дата' }),
+
                 dataIndex: 'created_at',
+
                 key: 'created_at',
+
                 render: (date: string) => new Date(date).toLocaleString(),
+
               },
+
               {
+
                 title: t('sales.fromStage', { defaultValue: 'С' }),
+
                 dataIndex: 'from_stage',
+
                 key: 'from_stage',
+
                 render: (stage: SaleStage) => getStageTag(stage),
+
               },
+
               {
+
                 title: t('sales.toStage', { defaultValue: 'На' }),
+
                 dataIndex: 'to_stage',
+
                 key: 'to_stage',
+
                 render: (stage: SaleStage) => getStageTag(stage),
+
               },
+
               {
+
                 title: t('sales.changedBy', { defaultValue: 'Изменил' }),
+
                 dataIndex: 'changed_by_username',
+
                 key: 'changed_by_username',
+
               },
+
             ]}
+
           />
+
         )}
+
       </Modal>
+
+
 
       {/* Payment Modal */}
+
       <Modal
+
         title={t('sales.addPayment', { defaultValue: 'Добавить оплату' })}
+
         open={paymentModalVisible}
+
         onCancel={() => setPaymentModalVisible(false)}
+
         onOk={handleAddPayment}
+
         confirmLoading={addingPayment}
+
         okText={t('common.add', { defaultValue: 'Добавить' })}
+
         cancelText={t('common.cancel', { defaultValue: 'Отмена' })}
+
       >
+
         {selectedSaleForPayment && (
+
           <div style={{ marginBottom: 16 }}>
+
             <div style={{ marginBottom: 16 }}>
+
               <Text strong>{t('sales.saleInfo', { defaultValue: 'Информация о продаже' })}:</Text>
+
               <div style={{ marginTop: 8 }}>
+
                 <div>{t('common.totalAmount', { defaultValue: 'Общая сумма' })}: <Text strong>{(parseFloat(selectedSaleForPayment.total_amount) || 0).toLocaleString()} TJS</Text></div>
+
                 <div>{t('sales.cashAmount', { defaultValue: 'Наличные' })}: <Text style={{ color: '#52c41a' }}>{(parseFloat(selectedSaleForPayment.cash_amount) || 0).toLocaleString()} TJS</Text></div>
+
                 <div>{t('sales.electronicAmount', { defaultValue: 'Электронные' })}: <Text style={{ color: '#1890ff' }}>{(parseFloat(selectedSaleForPayment.electronic_amount) || 0).toLocaleString()} TJS</Text></div>
+
                 <div>{t('sales.remainingAmount', { defaultValue: 'Осталось' })}: <Text style={{ color: '#ff4d4f' }}>{((parseFloat(selectedSaleForPayment.total_amount) || 0) - ((parseFloat(selectedSaleForPayment.cash_amount) || 0) + (parseFloat(selectedSaleForPayment.electronic_amount) || 0))).toLocaleString()} TJS</Text></div>
+
               </div>
-            </div>
-            
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 8 }}>
-                <Text strong>{t('sales.paymentAmount', { defaultValue: 'Сумма оплаты' })}:</Text>
-              </label>
-              <InputNumber
-                style={{ width: '100%' }}
-                min={0.01}
-                max={(parseFloat(selectedSaleForPayment.total_amount) || 0) - ((parseFloat(selectedSaleForPayment.cash_amount) || 0) + (parseFloat(selectedSaleForPayment.electronic_amount) || 0))}
-                precision={2}
-                value={paymentAmount}
-                onChange={(value) => setPaymentAmount(value || 0)}
-                suffix="TJS"
-              />
+
             </div>
 
+            
+
+            <div style={{ marginBottom: 16 }}>
+
+              <label style={{ display: 'block', marginBottom: 8 }}>
+
+                <Text strong>{t('sales.paymentAmount', { defaultValue: 'Сумма оплаты' })}:</Text>
+
+              </label>
+
+              <InputNumber
+
+                style={{ width: '100%' }}
+
+                min={0.01}
+
+                max={(parseFloat(selectedSaleForPayment.total_amount) || 0) - ((parseFloat(selectedSaleForPayment.cash_amount) || 0) + (parseFloat(selectedSaleForPayment.electronic_amount) || 0))}
+
+                precision={2}
+
+                value={paymentAmount}
+
+                onChange={(value) => setPaymentAmount(value || 0)}
+
+                suffix="TJS"
+
+              />
+
+            </div>
+
+
+
                       </div>
+
         )}
+
       </Modal>
+
     </div>
+
   );
+
 };
+

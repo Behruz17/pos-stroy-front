@@ -549,7 +549,7 @@ export const Suppliers = () => {
             dataSource={filteredSuppliers}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
           />
@@ -603,7 +603,7 @@ export const Suppliers = () => {
             )}
             rowKey="id"
             loading={operationsLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
             onRow={(record) => ({
@@ -648,7 +648,7 @@ export const Suppliers = () => {
             )}
             rowKey="id"
             loading={paymentsLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
           />

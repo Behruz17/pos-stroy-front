@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Input, InputNumber, Row, Col, type TableProps, Image, Upload, Modal, Select } from 'antd';
+import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form, Input, InputNumber, Row, Col, type TableProps, Image, Upload, Modal, Select, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, ShoppingOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, ShoppingOutlined, SearchOutlined, UploadOutlined, DollarOutlined } from '@ant-design/icons';
 import { productsApi, exchangeRatesApi, stockAdjustmentsApi, stockItemsApi, type Product, type ExchangeRate, type CreateStockAdjustment, type StockItem } from '../api';
 
 const { Title, Text } = Typography;
@@ -36,7 +36,7 @@ export const Products = () => {
       const data = await productsApi.getAll();
       setProducts(data);
       setFilteredProducts(data);
-      
+
       // Load stock items for batch products to get their prices
       const batchProducts = data.filter(p => p.type === 'batch');
       await Promise.all(
@@ -102,6 +102,23 @@ export const Products = () => {
     return rate ? Number(rate.rate_to_tjs) : null;
   };
 
+  const getTotalStockValue = (): number => {
+    return filteredProducts.reduce((total, product) => {
+      const priceInTJS = getProductPriceInTJS(product);
+      if (priceInTJS === null) return total;
+      
+      const quantity = Number(product.stock_quantity) || 0;
+      return total + (quantity * roundMoney(priceInTJS));
+    }, 0);
+  };
+
+  const getTotalStockQuantity = (): number => {
+    return filteredProducts.reduce((total, product) => {
+      const quantity = Number(product.stock_quantity) || 0;
+      return total + quantity;
+    }, 0);
+  };
+
   const getProductPrice = (product: Product): number | null => {
     // If product has selling_price, use it
     if (product.selling_price) {
@@ -121,6 +138,24 @@ export const Products = () => {
     }
     
     return null;
+  };
+
+  const getProductPriceInTJS = (product: Product): number | null => {
+    const productPrice = getProductPrice(product);
+    if (!productPrice) return null;
+
+    if (!product.currency || product.currency === 'TJS') {
+      return Number(productPrice);
+    }
+
+    const currentRate = getCurrentRateForCurrency(product.currency);
+    if (!currentRate) return null;
+
+    return Number(productPrice) * Number(currentRate);
+  };
+
+  const roundMoney = (value: number): number => {
+    return Math.round(value * 100) / 100;
   };
 
   const handleDelete = async (id: number) => {
@@ -167,6 +202,7 @@ export const Products = () => {
     setEditImagePreview(`http://localhost:3000${product.image}`);
     form.setFieldsValue({
       name: product.name,
+      currency: product.currency || 'TJS',
     });
   };
 
@@ -175,7 +211,14 @@ export const Products = () => {
 
     setEditing(true);
     try {
-      await productsApi.update(editingProduct.id, values);
+      // Always send name and currency to ensure currency is updated
+      const updateData = {
+        name: values.name,
+        currency: values.currency,
+      };
+      console.log('Updating product:', editingProduct.id, 'with data:', updateData);
+      console.log('Form values:', values);
+      await productsApi.update(editingProduct.id, updateData);
       message.success(t('products.productUpdated'));
       setEditModalVisible(false);
       setEditingProduct(null);
@@ -324,6 +367,13 @@ export const Products = () => {
       render: (type: Product['type']) => (type === 'batch' ? t('products.batch') : t('products.simple')),
     },
     {
+      title: 'Валюта',
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 80,
+      render: (currency: string) => currency || 'TJS',
+    },
+    {
       title: 'ID',
       dataIndex: 'id',
       key: 'id',
@@ -359,7 +409,56 @@ export const Products = () => {
       align: 'right',
       render: (_: number | null, record: Product) => {
         const productPrice = getProductPrice(record);
-        return productPrice ? productPrice.toLocaleString() : '-';
+        if (!productPrice) return '-';
+        
+        // Показываем цену с указанием валюты если она не TJS
+        if (!record.currency || record.currency === 'TJS') {
+          return productPrice.toLocaleString();
+        }
+        
+        return `${productPrice.toLocaleString()} ${record.currency}`;
+      },
+    },
+    {
+      title: (
+        <Tooltip title="Цена продажи, конвертированная в TJS по текущему курсу валюты товара">
+          <span><DollarOutlined style={{ marginRight: 4 }} />Цена продажи (TJS)</span>
+        </Tooltip>
+      ),
+      key: 'selling_price_tjs',
+      width: 140,
+      align: 'right',
+      render: (_: unknown, record: Product) => {
+        const convertedPrice = getProductPriceInTJS(record);
+        if (convertedPrice === null) return '-';
+
+        return (
+          <span style={{ color: '#1890ff', fontWeight: 500 }}>
+            {convertedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Сумма остатка (TJS)',
+      key: 'stock_value_tjs',
+      width: 150,
+      align: 'right',
+      onCell: () => ({
+        onClick: (e) => e.stopPropagation(),
+      }),
+      render: (_: unknown, record: Product) => {
+        const priceInTJS = getProductPriceInTJS(record);
+        if (priceInTJS === null) return '-';
+
+        const quantity = Number(record.stock_quantity) || 0;
+        const stockValue = quantity * roundMoney(priceInTJS);
+
+        return (
+          <span style={{ color: '#52c41a', fontWeight: 500 }}>
+            {stockValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
       },
     },
     {
@@ -413,12 +512,18 @@ export const Products = () => {
         <Space size="small">
           <Button
             icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(record);
+            }}
             size="small"
           />
           <Button
             type="default"
-            onClick={() => handleStockAdjustment(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleStockAdjustment(record);
+            }}
             size="small"
             title="Корректировка остатка и цены"
           >
@@ -427,11 +532,14 @@ export const Products = () => {
           <Popconfirm
             title="Удалить товар?"
             description="Это действие нельзя отменить"
-            onConfirm={() => handleDelete(record.id)}
+            onConfirm={(e) => {
+              e?.stopPropagation();
+              handleDelete(record.id);
+            }}
             okText="Да"
             cancelText="Нет"
           >
-            <Button danger icon={<DeleteOutlined />} size="small" />
+            <Button danger icon={<DeleteOutlined />} size="small" onClick={(e) => e.stopPropagation()} />
           </Popconfirm>
         </Space>
       ),
@@ -457,14 +565,45 @@ export const Products = () => {
             style={{ marginBottom: 16 }}
             allowClear
           />
+          
+          {/* Общая сумма всех товаров */}
+          <div style={{ 
+            marginBottom: 16, 
+            padding: '16px 20px', 
+            backgroundColor: '#f8f9fa', 
+            borderRadius: '8px',
+            border: '1px solid #e9ecef'
+          }}>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Text style={{ fontSize: 14, color: '#666' }}>
+                  Всего наименований товаров: <Text strong>{filteredProducts.length}</Text>
+                </Text>
+                <br />
+                <Text style={{ fontSize: 14, color: '#666' }}>
+                  Общее количество штук: <Text strong>{Number(getTotalStockQuantity()).toLocaleString()}</Text>
+                </Text>
+              </Col>
+              <Col>
+                <Text style={{ fontSize: 14, color: '#666', marginRight: 8 }}>
+                  Общая сумма всех товаров:
+                </Text>
+                <Text strong style={{ fontSize: 18, color: '#1890ff' }}>
+                  {Number(getTotalStockValue()).toLocaleString()} смн
+                </Text>
+              </Col>
+            </Row>
+          </div>
+          
           <Table
             columns={columns}
             dataSource={filteredProducts}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
-            scroll={{ x: 'max-content' }}
+            pagination={false}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 300px)' }}
             size="small"
+            sticky
             onRow={(record) => ({
               onClick: () => {
                 if (record.type === 'batch') {
@@ -514,6 +653,16 @@ export const Products = () => {
                     options={[
                       { value: 'simple', label: t('products.simple') },
                       { value: 'batch', label: t('products.batch') },
+                    ]}
+                  />
+                </Form.Item>
+
+                <Form.Item name="currency" label="Валюта товара" initialValue="TJS">
+                  <Select
+                    options={[
+                      { value: 'TJS', label: 'TJS (Сомони)' },
+                      { value: 'USD', label: 'USD (Доллар США)' },
+                      { value: 'RUB', label: 'RUB (Рубль)' },
                     ]}
                   />
                 </Form.Item>
@@ -647,6 +796,19 @@ export const Products = () => {
             <Input placeholder="Введите наименование товара" prefix={<ShoppingOutlined />} />
           </Form.Item>
 
+          <Form.Item
+            label="Валюта товара"
+            name="currency"
+            rules={[{ required: true, message: 'Выберите валюту товара' }]}
+          >
+            <Select
+              options={[
+                { value: 'TJS', label: 'TJS (Сомони)' },
+                { value: 'USD', label: 'USD (Доллар США)' },
+                { value: 'RUB', label: 'RUB (Рубль)' },
+              ]}
+            />
+          </Form.Item>
 
 
           {editImagePreview && (
@@ -749,7 +911,7 @@ export const Products = () => {
                 <label style={{ display: 'block', marginBottom: 8 }}>
                   <Text strong>Новая цена:</Text>
                   <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                    (только для партионных товаров)
+                    (только для партионных товаров, в {selectedProductForStock.currency || 'TJS'})
                   </Text>
                 </label>
                 <InputNumber
@@ -764,7 +926,7 @@ export const Products = () => {
                   const currentPrice = getProductPrice(selectedProductForStock);
                   return currentPrice && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      Текущая цена: {currentPrice}
+                      Текущая цена: {currentPrice} {selectedProductForStock.currency || 'TJS'}
                     </Text>
                   );
                 })()}
@@ -810,7 +972,7 @@ export const Products = () => {
 
       {/* Batches Modal */}
       <Modal
-        title={`Партии товара: ${selectedProductForBatches?.name}`}
+        title={`Партии товара: ${selectedProductForBatches?.name} (${selectedProductForBatches?.currency || 'TJS'})`}
         open={batchesModalVisible}
         onCancel={() => {
           setBatchesModalVisible(false);
@@ -836,7 +998,7 @@ export const Products = () => {
                     dataIndex: 'quantity',
                     key: 'quantity',
                     render: (quantity: number) => (
-                      <span style={{ 
+                      <span style={{
                         color: quantity <= 10 ? '#ff4d4f' : quantity <= 50 ? '#faad14' : '#52c41a',
                         fontWeight: quantity <= 10 ? 'bold' : 'normal'
                       }}>
@@ -845,7 +1007,7 @@ export const Products = () => {
                     ),
                   },
                   {
-                    title: 'Цена продажи',
+                    title: `Цена продажи (${selectedProductForBatches.currency || 'TJS'})`,
                     dataIndex: 'selling_price',
                     key: 'selling_price',
                     align: 'right',

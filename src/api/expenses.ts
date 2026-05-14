@@ -103,27 +103,27 @@ export const expensesApi = {
 
   // Expense Recipients API
   getRecipients: async (): Promise<ExpenseRecipient[]> => {
-    const response = await apiClient.get('/expenses/recipients');
+    const response = await apiClient.get('/expense-recipients');
     return response.data;
   },
 
   syncRecipients: async (): Promise<SyncRecipientsResponse> => {
-    const response = await apiClient.get('/expenses/recipients/sync');
+    const response = await apiClient.get('/expense-recipients/sync');
     return response.data;
   },
 
   createRecipient: async (data: CreateExpenseRecipientRequest): Promise<ExpenseRecipient> => {
-    const response = await apiClient.post('/expenses/recipients', data);
+    const response = await apiClient.post('/expense-recipients', data);
     return response.data;
   },
 
   updateRecipient: async (id: number, data: UpdateExpenseRecipientRequest): Promise<ExpenseRecipient> => {
-    const response = await apiClient.put(`/expenses/recipients/${id}`, data);
+    const response = await apiClient.put(`/expense-recipients/${id}`, data);
     return response.data;
   },
 
   deleteRecipient: async (id: number): Promise<{ message: string }> => {
-    const response = await apiClient.delete(`/expenses/recipients/${id}`);
+    const response = await apiClient.delete(`/expense-recipients/${id}`);
     return response.data;
   }
 };

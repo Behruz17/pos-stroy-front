@@ -224,7 +224,7 @@ export const Users = () => {
             dataSource={filteredUsers}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
           />

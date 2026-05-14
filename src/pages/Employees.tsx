@@ -170,11 +170,7 @@ export const Employees = () => {
           dataSource={employees}
           loading={loading}
           rowKey="id"
-          pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} из ${total} ${t('employees.records', { defaultValue: 'записей' })}`
-          }}
+          pagination={false}
         />
       </Card>
 

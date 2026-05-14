@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Users } from './pages/Users'
 import { Suppliers } from './pages/Suppliers'
 import { Products } from './pages/Products'
+import { StockRevision } from './pages/StockRevision'
 import { Customers } from './pages/Customers'
 import { StockReceipts } from './pages/StockReceipts'
 import { Sales } from './pages/Sales'
@@ -20,6 +21,7 @@ import { DailySummaryPage } from './pages/DailySummary'
 import { Conversions } from './pages/Conversions'
 import { ExchangeRates } from './pages/ExchangeRates'
 import { Employees } from './pages/Employees'
+import { UserCashflow } from './pages/UserCashflow'
 
 function App() {
   return (
@@ -60,6 +62,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Products />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock-revision"
+              element={
+                <ProtectedRoute>
+                  <StockRevision />
                 </ProtectedRoute>
               }
             />
@@ -164,6 +174,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Employees />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/user-cashflow"
+              element={
+                <ProtectedRoute>
+                  <UserCashflow />
                 </ProtectedRoute>
               }
             />

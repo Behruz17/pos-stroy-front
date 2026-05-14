@@ -3,7 +3,7 @@ import { Layout as AntLayout, Menu, Button, Typography, Divider, Drawer } from '
 import { useAuth } from '../contexts/AuthContext'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { UserOutlined, DashboardOutlined, LogoutOutlined, TeamOutlined, ShopOutlined, MenuOutlined, ShoppingOutlined, UserAddOutlined, ShoppingCartOutlined, DollarOutlined, RotateLeftOutlined, CreditCardOutlined, WalletOutlined, PieChartOutlined, CarryOutOutlined, SwapOutlined } from '@ant-design/icons'
+import { UserOutlined, DashboardOutlined, LogoutOutlined, TeamOutlined, ShopOutlined, MenuOutlined, ShoppingOutlined, UserAddOutlined, ShoppingCartOutlined, DollarOutlined, RotateLeftOutlined, CreditCardOutlined, WalletOutlined, PieChartOutlined, SwapOutlined, BankOutlined, AuditOutlined } from '@ant-design/icons'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import './Layout.css'
 
@@ -42,6 +42,11 @@ export const Layout = ({ children }: LayoutProps) => {
           key: '/products',
           icon: <ShoppingOutlined />,
           label: <Link to="/products">{t('navigation.products')}</Link>,
+        },
+        {
+          key: '/stock-revision',
+          icon: <AuditOutlined />,
+          label: <Link to="/stock-revision">{t('navigation.stockRevision', { defaultValue: 'Ревизия' })}</Link>,
         },
         {
           key: '/customers',
@@ -103,10 +108,15 @@ export const Layout = ({ children }: LayoutProps) => {
           icon: <PieChartOutlined />,
           label: <Link to="/reports">{t('navigation.reports', { defaultValue: 'Отчеты' })}</Link>,
         },
+        // {
+        //   key: '/daily-summary',
+        //   icon: <CarryOutOutlined />,
+        //   label: <Link to="/daily-summary">{t('navigation.dailySummary', { defaultValue: 'Итог дня' })}</Link>,
+        // },
         {
-          key: '/daily-summary',
-          icon: <CarryOutOutlined />,
-          label: <Link to="/daily-summary">{t('navigation.dailySummary', { defaultValue: 'Итог дня' })}</Link>,
+          key: '/user-cashflow',
+          icon: <BankOutlined />,
+          label: <Link to="/user-cashflow">{t('navigation.userCashflow', { defaultValue: 'Итог дня' })}</Link>,
         },
         // {
         //   key: '/debtors',

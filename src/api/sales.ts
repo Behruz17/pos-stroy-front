@@ -29,6 +29,7 @@ export interface Sale {
   stage: SaleStage;
   debt_deadline?: string;
   created_by: number;
+  seller_name: string;
   created_at: string;
   items?: SaleItem[];
 }
@@ -141,7 +142,7 @@ export interface UpdateSaleRequest {
 
 export const salesApi = {
   // GET /sales - Getting list of all sales with date filtering
-  getAll: async (params?: { date?: string; month?: number; year?: number }): Promise<Sale[]> => {
+  getAll: async (params?: { date?: string; month?: number; year?: number; seller_id?: number }): Promise<Sale[]> => {
     const queryParams = new URLSearchParams();
     
     if (params?.date) {
@@ -152,6 +153,9 @@ export const salesApi = {
     }
     if (params?.year !== undefined) {
       queryParams.append('year', params.year.toString());
+    }
+    if (params?.seller_id !== undefined) {
+      queryParams.append('seller_id', params.seller_id.toString());
     }
     
     const url = queryParams.toString() ? `/sales?${queryParams.toString()}` : '/sales';

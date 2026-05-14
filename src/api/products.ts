@@ -14,8 +14,10 @@ export interface Product {
   purchase_cost: number | null;
   selling_price: number | null;
   purchase_cost_converted: number | null;
-  currency: string | null;
-  rate: string | null;
+  currency: string; // TJS, USD, RUB
+  receipt_currency: string; // Currency of last receipt
+  rate: number; // Exchange rate
+  status: number;
   created_at: string;
 }
 
@@ -24,6 +26,7 @@ export interface CreateProductRequest {
   manufacturer?: string;
   product_code?: string;
   type?: ProductType;
+  currency?: string; // TJS, USD, RUB - defaults to TJS
   image?: File;
   notification_threshold?: number;
 }
@@ -33,6 +36,7 @@ export interface UpdateProductRequest {
   manufacturer?: string;
   product_code?: string;
   type?: ProductType;
+  currency?: string; // Can change currency
   image?: File;
   notification_threshold?: number;
 }
@@ -78,6 +82,7 @@ export const productsApi = {
     if (data.manufacturer) formData.append('manufacturer', data.manufacturer);
     if (data.product_code) formData.append('product_code', data.product_code);
     if (data.type) formData.append('type', data.type);
+    if (data.currency) formData.append('currency', data.currency);
     
     const imageFile = extractImageFile(data);
     if (imageFile) formData.append('image', imageFile);
@@ -99,12 +104,18 @@ export const productsApi = {
     if (data.manufacturer) formData.append('manufacturer', data.manufacturer);
     if (data.product_code) formData.append('product_code', data.product_code);
     if (data.type) formData.append('type', data.type);
-    
+    if (data.currency) formData.append('currency', data.currency);
+
     const imageFile = extractImageFile(data);
     if (imageFile) formData.append('image', imageFile);
-    
+
     if (data.notification_threshold !== undefined) formData.append('notification_threshold', data.notification_threshold.toString());
-    
+
+    console.log('API update - FormData contents:');
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+
     const response = await apiClient.put<Product>(`/products/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

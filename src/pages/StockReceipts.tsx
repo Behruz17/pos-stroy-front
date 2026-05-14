@@ -563,7 +563,7 @@ export const StockReceipts = () => {
             )}
             rowKey="id"
             loading={loading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 'max-content' }}
             size="small"
             onRow={(record) => ({
@@ -614,7 +614,9 @@ export const StockReceipts = () => {
                           const supplier = suppliers.find(s => s.id === value);
                           if (supplier?.currency) {
                             form.setFieldValue('currency', supplier.currency);
+                            form.setFieldValue('rate', undefined);
                             setFormCurrency(supplier.currency);
+                            setFormRate(1);
                             // Пересчитываем цены с доставкой при смене поставщика (и валюты)
                             if (deliveryCost) {
                               recalculatePurchaseCostsWithDelivery(deliveryCost);
@@ -659,15 +661,17 @@ export const StockReceipts = () => {
                         name="rate"
                         label={t('common.rate')}
                         rules={[{ required: true, message: t('errors.required') }]}
-                        initialValue={1}
                       >
                         <InputNumber
                           min={0.001}
-                          step={0.001}
-                          precision={0}
+                          step={0.0001}
                           style={{ width: '100%' }}
                           prefix={<SwapOutlined />}
                           placeholder={t('stockReceipts.enterRate', { defaultValue: 'Введите курс к TJS' })}
+                          parser={(value) => {
+                            if (!value) return null as unknown as number;
+                            return parseFloat(value.replace(',', '.')) || null as unknown as number;
+                          }}
                           onChange={(value) => {
                             console.log('Rate changed:', value);
                             const newRate = value || 1;
