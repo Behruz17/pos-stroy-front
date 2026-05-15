@@ -35,6 +35,7 @@ export interface CreateReturnItem {
 
 export interface CreateReturnRequest {
   customer_id: number;
+  account_id: number;
   items: CreateReturnItem[];
 }
 

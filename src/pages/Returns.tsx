@@ -3,7 +3,7 @@ import { Table, Button, Space, Typography, Card, message, Popconfirm, Tabs, Form
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, DollarOutlined, CalendarOutlined, UserOutlined, RotateLeftOutlined } from '@ant-design/icons';
-import { returnsApi, customersApi, productsApi, stockItemsApi, type Return, type ReturnItem, type CreateReturnRequest, type Customer, type Product, type StockItem } from '../api';
+import { returnsApi, customersApi, productsApi, stockItemsApi, accountsApi, type Return, type ReturnItem, type CreateReturnRequest, type Customer, type Product, type StockItem, type Account } from '../api';
 
 interface CreateReturnItemLocal {
   product_id: number;
@@ -32,6 +32,7 @@ export const Returns = () => {
   const [form] = Form.useForm();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [returnItems, setReturnItems] = useState<CreateReturnItemLocal[]>([]);
   const [selectedReturn, setSelectedReturn] = useState<Return | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -97,6 +98,20 @@ export const Returns = () => {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+
+      // Автоматически выбираем первый счет
+      if (data.length > 0) {
+        form.setFieldValue('account_id', data[0].id);
+      }
+    } catch (error: unknown) {
+      message.error('Ошибка при загрузке счетов');
+    }
+  };
+
   const fetchProductStockItems = async (productId: number) => {
     if (productStockItems[productId]) return; // already cached
     setLoadingStockItems(prev => ({ ...prev, [productId]: true }));
@@ -116,6 +131,7 @@ export const Returns = () => {
     fetchReturns();
     fetchCustomers();
     fetchProducts();
+    fetchAccounts();
   }, []);
 
   useEffect(() => {
@@ -194,6 +210,7 @@ export const Returns = () => {
 
       const createData: CreateReturnRequest = {
         customer_id: values.customer_id,
+        account_id: values.account_id,
         items: returnItems,
       };
 
@@ -523,6 +540,20 @@ export const Returns = () => {
                     {customers.map(customer => (
                       <Option key={customer.id} value={customer.id}>
                         {customer.full_name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+
+                <Form.Item
+                  name="account_id"
+                  label="Счет для возврата"
+                  rules={[{ required: true, message: 'Выберите счет для возврата денег' }]}
+                >
+                  <Select placeholder="Выберите счет" prefix={<DollarOutlined />}>
+                    {accounts.map(account => (
+                      <Option key={account.id} value={account.id}>
+                        {account.name} ({account.currency}) - Баланс: {account.current_balance.toLocaleString()}
                       </Option>
                     ))}
                   </Select>

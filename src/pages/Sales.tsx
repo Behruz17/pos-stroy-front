@@ -144,6 +144,8 @@ export const Sales = () => {
 
   const selectedCustomerId = Form.useWatch('customer_id', form);
 
+  const selectedDebtorValue = Form.useWatch('debtor_id', form);
+
   const selectedCustomer = customers.find(customer => customer.id === selectedCustomerId);
 
   const isRetailCustomer = Boolean(selectedCustomer?.full_name?.toLowerCase().includes('розница'));
@@ -151,6 +153,8 @@ export const Sales = () => {
   const shouldShowDebtorSelect = (paymentStatus === 'DEBT' || paymentStatus === 'PARTIAL') && isRetailCustomer;
 
   const newDebtorOptionPrefix = 'new-debtor:';
+
+  const isNewDebtorSelected = typeof selectedDebtorValue === 'string' && selectedDebtorValue.startsWith(newDebtorOptionPrefix);
 
   const normalizedDebtorSearchText = debtorSearchText.trim().toLowerCase();
 
@@ -459,9 +463,23 @@ export const Sales = () => {
 
       form.setFieldValue('debtor_id', undefined);
 
+      form.setFieldValue('debtor_phone', undefined);
+
     }
 
   }, [shouldShowDebtorSelect, form]);
+
+
+
+  useEffect(() => {
+
+    if (!isNewDebtorSelected) {
+
+      form.setFieldValue('debtor_phone', undefined);
+
+    }
+
+  }, [isNewDebtorSelected, form]);
 
 
 
@@ -786,6 +804,8 @@ export const Sales = () => {
             await debtorsApi.create({
 
               full_name: debtorName,
+
+              phone: values.debtor_phone,
 
               initial_debt: debtAmount,
 
@@ -3172,6 +3192,24 @@ export const Sales = () => {
                       options={debtorOptions}
 
                     />
+
+                  </Form.Item>
+
+                )}
+
+
+
+                {shouldShowDebtorSelect && isNewDebtorSelected && (
+
+                  <Form.Item
+
+                    name="debtor_phone"
+
+                    label={t('common.phone', { defaultValue: 'Телефон' })}
+
+                  >
+
+                    <Input placeholder="Введите телефон должника" />
 
                   </Form.Item>
 
