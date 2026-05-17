@@ -13,12 +13,14 @@ export interface DebtorOperation {
 
 export interface CreateBorrowedRequest {
   debtor_id: number;
+  account_id: number;
   amount: number;
   description: string;
 }
 
 export interface CreateReturnedRequest {
   debtor_id: number;
+  account_id: number;
   amount: number;
   description: string;
 }

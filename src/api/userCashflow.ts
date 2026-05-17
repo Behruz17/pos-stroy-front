@@ -1,9 +1,17 @@
 import { apiClient } from './client';
 
 export interface CashflowOperation {
-  type: 'sale' | 'customer_payment' | 'return' | 'expense' | 'supplier_payment';
+  type:
+    | 'sale'
+    | 'customer_payment'
+    | 'debtor_returned'
+    | 'return'
+    | 'expense'
+    | 'supplier_payment'
+    | 'debtor_borrowed'
+    | 'salary_payment';
   id: number;
-  amount: number | string; // Backend returns string, we'll convert to number
+  amount: number | string; // Backend may return string
   counterpart_id: number | null;
   counterpart_name: string | null;
   description: string;
@@ -59,9 +67,9 @@ export const userCashflowApi = {
       params.append('created_by', filters.created_by.toString());
     }
     
-    const url = `/user-cashflow?${params.toString()}`;
-    console.log('Full API URL:', url);
-    const response = await apiClient.get(url);
+    const queryString = params.toString();
+    const url = queryString ? `/user-cashflow?${queryString}` : '/user-cashflow';
+    const response = await apiClient.get<UserCashflowResponse>(url);
     return response.data;
   }
 };

@@ -8,6 +8,9 @@ export interface GeneralReportSummary {
   totalExpenses: number;
   totalStockReceipts: number;
   totalReturns: number;
+  totalDebtorBorrowed: number;
+  totalDebtorReturned: number;
+  totalSalaryPayments: number;
   profit: number;
   salesCount: number;
   customersCount: number;
@@ -55,7 +58,7 @@ export interface SalesReportFilters {
   start_date?: string;
   end_date?: string;
   customer_id?: number;
-  payment_status?: 'PAID' | 'DEBT' | 'PARTIAL';
+  payment_status?: 'PAID' | 'DEBT';
 }
 
 export interface SalesReportResponse {

@@ -34,13 +34,15 @@ import {
 import { 
   debtorsApi, 
   debtorOperationsApi,
+  accountsApi,
   type Debtor,
   type DebtorOperation,
   type DebtorOperationFilters,
   type CreateDebtorRequest,
   type UpdateDebtorRequest,
   type CreateBorrowedRequest,
-  type CreateReturnedRequest
+  type CreateReturnedRequest,
+  type Account
 } from '../api';
 import dayjs from 'dayjs';
 
@@ -66,6 +68,7 @@ export const Debtors = () => {
   const [operationModalVisible, setOperationModalVisible] = useState(false);
   const [operationType, setOperationType] = useState<'BORROWED' | 'RETURNED'>('BORROWED');
   const [operationForm] = Form.useForm();
+  const [accounts, setAccounts] = useState<Account[]>([]);
 
   const fetchDebtors = async () => {
     setLoading(true);
@@ -105,9 +108,24 @@ export const Debtors = () => {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const data = await accountsApi.getAll();
+      setAccounts(data);
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status: number } };
+      if (axiosError.response?.status === 401) {
+        message.error(t('errors.unauthorized'));
+      } else {
+        message.error(t('debtors.errorLoadingAccounts', { defaultValue: 'Ошибка загрузки счетов' }));
+      }
+    }
+  };
+
   useEffect(() => {
     fetchDebtors();
     fetchOperations();
+    fetchAccounts();
   }, []);
 
   useEffect(() => {
@@ -648,6 +666,26 @@ export const Debtors = () => {
               {debtors.map(debtor => (
                 <Option key={debtor.id} value={debtor.id}>
                   {debtor.full_name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          
+          <Form.Item
+            label="Счет"
+            name="account_id"
+            rules={[{ required: true, message: 'Выберите счет' }]}
+          >
+            <Select
+              placeholder="Выберите счет"
+              showSearch
+              filterOption={(input, option) =>
+                (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {accounts.map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.name} ({account.current_balance} {account.currency})
                 </Option>
               ))}
             </Select>

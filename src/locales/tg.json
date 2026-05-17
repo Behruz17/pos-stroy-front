@@ -560,6 +560,12 @@
     "newPayment": "Пардохти нав",
     "back": "Бозгашт"
   },
+  "reports": {
+    "totalReturns": "Бозгаштҳо",
+    "totalDebtorBorrowed": "Ба қарздорон дода шуд",
+    "totalDebtorReturned": "Аз қарздорон баргашт",
+    "totalSalaryPayments": "Пардохти маошҳо"
+  },
   "errors": {
     "required": "Майдони ҳатмӣ",
     "invalidEmail": "Email нодуруст",

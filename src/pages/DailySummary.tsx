@@ -148,11 +148,28 @@ export const DailySummaryPage = () => {
     const colors: Record<string, string> = {
       sale: 'blue',
       customer_payment: 'green',
+      debtor_returned: 'cyan',
       return: 'orange',
       expense: 'red',
-      supplier_payment: 'purple'
+      supplier_payment: 'purple',
+      debtor_borrowed: 'magenta',
+      salary_payment: 'volcano'
     };
     return colors[type] || 'default';
+  };
+
+  const getOperationTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      sale: 'Продажа',
+      customer_payment: 'Платеж клиента',
+      debtor_returned: 'Возврат должника',
+      return: 'Возврат',
+      expense: 'Расход',
+      supplier_payment: 'Платеж поставщику',
+      debtor_borrowed: 'Выдача должнику',
+      salary_payment: 'Выплата зарплаты'
+    };
+    return labels[type] || type;
   };
   
   const operationColumns = [
@@ -162,11 +179,7 @@ export const DailySummaryPage = () => {
       key: 'type',
       render: (type: string) => (
         <Tag color={getOperationTypeColor(type)}>
-          {type === 'sale' ? 'Продажа' :
-           type === 'customer_payment' ? 'Платеж клиента' :
-           type === 'return' ? 'Возврат' :
-           type === 'expense' ? 'Расход' :
-           type === 'supplier_payment' ? 'Платеж поставщику' : type}
+          {getOperationTypeLabel(type)}
         </Tag>
       ),
     },
@@ -539,7 +552,7 @@ export const DailySummaryPage = () => {
                   <Table
                     columns={operationColumns}
                     dataSource={cashflowData.operations}
-                    rowKey="id"
+                    rowKey={(record) => `${record.type}-${record.id}`}
                     loading={cashflowLoading}
                     pagination={false}
                   />

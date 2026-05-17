@@ -143,9 +143,12 @@ export const UserCashflow: React.FC = () => {
     const colors: Record<string, string> = {
       sale: 'blue',
       customer_payment: 'green',
+      debtor_returned: 'cyan',
       return: 'orange',
       expense: 'red',
-      supplier_payment: 'purple'
+      supplier_payment: 'purple',
+      debtor_borrowed: 'magenta',
+      salary_payment: 'volcano'
     };
     return colors[type] || 'default';
   };
@@ -154,9 +157,12 @@ export const UserCashflow: React.FC = () => {
     const labels: Record<string, string> = {
       sale: 'Продажа',
       customer_payment: 'Оплата клиента',
+      debtor_returned: 'Возврат должника',
       return: 'Возврат',
       expense: 'Расход',
-      supplier_payment: 'Оплата поставщику'
+      supplier_payment: 'Оплата поставщику',
+      debtor_borrowed: 'Выдача должнику',
+      salary_payment: 'Выплата зарплаты'
     };
     return labels[type] || type;
   };
@@ -418,7 +424,7 @@ export const UserCashflow: React.FC = () => {
             <Table
               columns={operationColumns}
               dataSource={data.operations}
-              rowKey="id"
+              rowKey={(record) => `${record.type}-${record.id}`}
               loading={loading}
               scroll={{ x: screens.md ? undefined : 'max-content' }}
               pagination={false}

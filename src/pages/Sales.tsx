@@ -287,6 +287,9 @@ export const Sales = () => {
 
 
 
+
+
+
   const fetchProducts = async () => {
 
     try {
@@ -820,6 +823,8 @@ export const Sales = () => {
             await debtorOperationsApi.createBorrowed({
 
               debtor_id: Number(values.debtor_id),
+
+              account_id: 1,
 
               amount: debtAmount,
 

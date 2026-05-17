@@ -46,7 +46,7 @@ export const Reports = () => {
   const [salesReport, setSalesReport] = useState<SalesReportResponse | null>(null);
   const [loadingSales, setLoadingSales] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<number | undefined>();
-  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<'PAID' | 'DEBT' | 'PARTIAL' | undefined>();
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<'PAID' | 'DEBT' | undefined>();
   const [customers, setCustomers] = useState<Customer[]>([]);
   
   // Arrivals report state
@@ -364,7 +364,6 @@ export const Reports = () => {
                   onChange={setSelectedPaymentStatus}
                 >
                   <Select.Option value="PAID">{t('sales.paid', { defaultValue: 'Оплачено' })}</Select.Option>
-                  <Select.Option value="PARTIAL">{t('sales.partial', { defaultValue: 'Частично' })}</Select.Option>
                   <Select.Option value="DEBT">{t('sales.debt', { defaultValue: 'Долг' })}</Select.Option>
                 </Select>
               </>
@@ -478,6 +477,54 @@ export const Reports = () => {
                         precision={2}
                         prefix={<ImportOutlined />}
                         valueStyle={{ color: '#1890ff' }}
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Card>
+                      <Statistic
+                        title={t('reports.totalReturns', { defaultValue: 'Возвраты' })}
+                        value={generalReport.summary.totalReturns}
+                        precision={2}
+                        prefix={<DollarOutlined />}
+                        valueStyle={{ color: '#faad14' }}
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Card>
+                      <Statistic
+                        title={t('reports.totalDebtorBorrowed', { defaultValue: 'Выдано должникам' })}
+                        value={generalReport.summary.totalDebtorBorrowed}
+                        precision={2}
+                        prefix={<DollarOutlined />}
+                        valueStyle={{ color: '#722ed1' }}
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Card>
+                      <Statistic
+                        title={t('reports.totalDebtorReturned', { defaultValue: 'Возвращено должниками' })}
+                        value={generalReport.summary.totalDebtorReturned}
+                        precision={2}
+                        prefix={<DollarOutlined />}
+                        valueStyle={{ color: '#13c2c2' }}
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Card>
+                      <Statistic
+                        title={t('reports.totalSalaryPayments', { defaultValue: 'Выплаты зарплат' })}
+                        value={generalReport.summary.totalSalaryPayments}
+                        precision={2}
+                        prefix={<DollarOutlined />}
+                        valueStyle={{ color: '#eb2f96' }}
                         formatter={(value) => formatCurrency(value)}
                       />
                     </Card>
