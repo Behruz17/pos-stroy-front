@@ -210,6 +210,22 @@ export const Reports = () => {
       render: (amount: string) => <strong>{formatCurrency(amount)}</strong>,
     },
     {
+      title: t('sales.discount', { defaultValue: 'Скидка' }),
+      dataIndex: 'discount',
+      key: 'discount',
+      render: (discount: string) => <span style={{ color: '#ff4d4f' }}>{formatCurrency(discount)}</span>,
+    },
+    {
+      title: t('reports.profit', { defaultValue: 'Прибыль' }),
+      dataIndex: 'total_profit',
+      key: 'total_profit',
+      render: (profit: number) => (
+        <strong style={{ color: profit >= 0 ? '#52c41a' : '#ff4d4f' }}>
+          {formatCurrency(profit)}
+        </strong>
+      ),
+    },
+    {
       title: t('common.status'),
       dataIndex: 'payment_status',
       key: 'payment_status',
@@ -227,7 +243,10 @@ export const Reports = () => {
           <Panel header={`${record.items?.length || 0} ${t('common.items', { defaultValue: 'товаров' })}`} key="1">
             {record.items?.map((item: any, idx: number) => (
               <div key={idx} style={{ padding: '4px 0', fontSize: 12 }}>
-                {item.product_name} — {item.quantity} × {formatCurrency(item.unit_price)} = {formatCurrency(item.total_price)}
+                <div>{item.product_name} — {item.quantity} × {formatCurrency(item.unit_price)} = {formatCurrency(item.total_price)}</div>
+                <div style={{ color: '#666', fontSize: 11 }}>
+                  {t('reports.purchaseCost', { defaultValue: 'Закупка' })}: {formatCurrency(item.purchase_cost_tjs)} {item.currency !== 'TJS' && `(${item.currency} ${formatCurrency(item.purchase_cost_original)} × ${item.exchange_rate})`} | {t('reports.unitProfit', { defaultValue: 'Прибыль/ед' })}: {formatCurrency(item.unit_profit)} | {t('reports.itemProfit', { defaultValue: 'Прибыль' })}: {formatCurrency(item.total_profit)}
+                </div>
               </div>
             ))}
           </Panel>
@@ -580,7 +599,7 @@ export const Reports = () => {
             {salesReport && (
               <>
                 <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                  <Col xs={24} sm={8}>
+                  <Col xs={24} sm={6}>
                     <Card size="small">
                       <Statistic
                         title={t('reports.totalAmount', { defaultValue: 'Общая сумма' })}
@@ -590,7 +609,7 @@ export const Reports = () => {
                       />
                     </Card>
                   </Col>
-                  <Col xs={24} sm={8}>
+                  <Col xs={24} sm={6}>
                     <Card size="small">
                       <Statistic
                         title={t('reports.paidAmount', { defaultValue: 'Оплачено' })}
@@ -601,13 +620,24 @@ export const Reports = () => {
                       />
                     </Card>
                   </Col>
-                  <Col xs={24} sm={8}>
+                  <Col xs={24} sm={6}>
                     <Card size="small">
                       <Statistic
                         title={t('reports.debtAmount', { defaultValue: 'Долг' })}
                         value={salesReport.summary.debtAmount}
                         precision={2}
                         valueStyle={{ color: '#ff4d4f' }}
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={6}>
+                    <Card size="small">
+                      <Statistic
+                        title={t('reports.totalProfit', { defaultValue: 'Общая прибыль' })}
+                        value={salesReport.summary.totalProfit}
+                        precision={2}
+                        valueStyle={{ color: salesReport.summary.totalProfit >= 0 ? '#52c41a' : '#ff4d4f' }}
                         formatter={(value) => formatCurrency(value)}
                       />
                     </Card>

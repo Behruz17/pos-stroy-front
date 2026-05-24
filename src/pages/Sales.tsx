@@ -10,6 +10,8 @@ import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined,
 
 import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, usersApi, debtorsApi, debtorOperationsApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style, type UserWithCreated, type Debtor } from '../api';
 
+import { useAuth } from '../contexts/AuthContext';
+
 import dayjs from 'dayjs';
 
 import '../components/Receipt.css';
@@ -55,6 +57,7 @@ const { Option } = Select;
 export const Sales = () => {
 
   const { t } = useTranslation();
+  const { user } = useAuth();
 
   const [sales, setSales] = useState<Sale[]>([]);
 
@@ -814,6 +817,8 @@ export const Sales = () => {
 
               description: `Долг по продаже #${createdSale.id}`,
 
+              created_by: user?.id || 0,
+
             });
 
             fetchDebtors();
@@ -829,6 +834,8 @@ export const Sales = () => {
               amount: debtAmount,
 
               description: `Долг по продаже #${createdSale.id}`,
+
+              created_by: user?.id || 0,
 
             });
 

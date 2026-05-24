@@ -986,7 +986,7 @@ export const Products = () => {
             Закрыть
           </Button>
         ]}
-        width={400}
+        width={520}
       >
         {selectedProductForBatches && (
           <div>
@@ -1005,6 +1005,13 @@ export const Products = () => {
                         {quantity}
                       </span>
                     ),
+                  },
+                  {
+                    title: `Цена закупки (${selectedProductForBatches.currency || 'TJS'})`,
+                    dataIndex: 'purchase_cost',
+                    key: 'purchase_cost',
+                    align: 'right',
+                    render: (price: number) => price ? price.toLocaleString() : '-',
                   },
                   {
                     title: `Цена продажи (${selectedProductForBatches.currency || 'TJS'})`,

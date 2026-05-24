@@ -12,7 +12,8 @@ export const Expenses = () => {
   const { t } = useTranslation();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
-    const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
@@ -96,6 +97,7 @@ export const Expenses = () => {
   };
 
   const handleCreate = async (values: any) => {
+    setCreating(true);
     try {
       const createData: CreateExpenseRequest = {
         description: values.description,
@@ -113,6 +115,8 @@ export const Expenses = () => {
     } catch (error: unknown) {
       console.error('Error creating expense:', error);
       message.error(t('expenses.errorCreating', { defaultValue: 'Ошибка создания расхода' }));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -606,6 +610,29 @@ export const Expenses = () => {
                 </Option>
               ))}
             </Select>
+          </Form.Item>
+
+          <Form.Item style={{ marginTop: 24 }}>
+            <Space>
+              <Button
+                type="primary"
+                htmlType="submit"
+                icon={<SaveOutlined />}
+                size="large"
+                loading={creating}
+              >
+                {t('common.create', { defaultValue: 'Создать' })}
+              </Button>
+              <Button
+                onClick={() => {
+                  setCreateModalVisible(false);
+                  createForm.resetFields();
+                }}
+                size="large"
+              >
+                {t('common.cancel')}
+              </Button>
+            </Space>
           </Form.Item>
         </Form>
       </Modal>

@@ -16,6 +16,7 @@ export interface CreateBorrowedRequest {
   account_id: number;
   amount: number;
   description: string;
+  created_by: number;
 }
 
 export interface CreateReturnedRequest {
@@ -23,6 +24,7 @@ export interface CreateReturnedRequest {
   account_id: number;
   amount: number;
   description: string;
+  created_by: number;
 }
 
 export interface DebtorOperationFilters {

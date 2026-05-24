@@ -30,21 +30,35 @@ export interface GeneralReportResponse {
 
 // Sales Report Types
 export interface ReportSaleItem {
+  id: number;
   quantity: number;
   unit_price: string;
   total_price: string;
+  stock_item_id: number | null;
   product_name: string;
   product_code: string;
+  product_type: 'simple' | 'batch';
+  product_purchase_cost: string;
+  purchase_cost: string;
+  currency: 'TJS' | 'USD' | 'RUB';
+  exchange_rate: number;
+  purchase_cost_original: number;
+  purchase_cost_tjs: number;
+  unit_profit: number;
+  total_profit_before_discount: number;
+  total_profit: number;
 }
 
 export interface ReportSale {
   id: number;
   total_amount: string;
+  discount: string;
   payment_status: 'PAID' | 'DEBT' | 'PARTIAL';
   created_at: string;
   customer_name: string;
   customer_phone: string | null;
   created_by_name: string;
+  total_profit: number;
   items: ReportSaleItem[];
 }
 
@@ -52,6 +66,7 @@ export interface SalesReportSummary {
   totalAmount: number;
   paidAmount: number;
   debtAmount: number;
+  totalProfit: number;
 }
 
 export interface SalesReportFilters {

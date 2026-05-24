@@ -44,6 +44,7 @@ import {
   type CreateReturnedRequest,
   type Account
 } from '../api';
+import { useAuth } from '../contexts/AuthContext';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -51,6 +52,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 
 export const Debtors = () => {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,6 +70,7 @@ export const Debtors = () => {
   const [operationModalVisible, setOperationModalVisible] = useState(false);
   const [operationType, setOperationType] = useState<'BORROWED' | 'RETURNED'>('BORROWED');
   const [operationForm] = Form.useForm();
+  const [operationSubmitting, setOperationSubmitting] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   const fetchDebtors = async () => {
@@ -200,6 +203,7 @@ export const Debtors = () => {
           phone: values.phone,
           ...(values.debt_amount && values.debt_amount > 0 && { initial_debt: values.debt_amount }),
           description: values.description,
+          created_by: user?.id || 0,
         };
         await debtorsApi.create(createData);
         if (values.debt_amount && values.debt_amount > 0) {
@@ -233,19 +237,28 @@ export const Debtors = () => {
   };
 
   const handleOperationSubmit = async (values: any) => {
+    setOperationSubmitting(true);
     try {
+      const dataWithCreatedBy = {
+        ...values,
+        created_by: user?.id
+      };
+      
       if (operationType === 'BORROWED') {
-        await debtorOperationsApi.createBorrowed(values as CreateBorrowedRequest);
+        await debtorOperationsApi.createBorrowed(dataWithCreatedBy as CreateBorrowedRequest);
         message.success(t('debtors.borrowOperationCreated', { defaultValue: 'Операция займа успешно создана' }));
       } else {
-        await debtorOperationsApi.createReturned(values as CreateReturnedRequest);
+        await debtorOperationsApi.createReturned(dataWithCreatedBy as CreateReturnedRequest);
         message.success(t('debtors.returnOperationCreated', { defaultValue: 'Операция возврата успешно создана' }));
       }
       setOperationModalVisible(false);
       operationForm.resetFields();
       fetchOperations();
+      fetchDebtors();
     } catch (error: unknown) {
       message.error(t('debtors.errorSavingOperation', { defaultValue: 'Ошибка при сохранении операции' }));
+    } finally {
+      setOperationSubmitting(false);
     }
   };
 
@@ -640,7 +653,7 @@ export const Debtors = () => {
           }}>
             {t('common.cancel')}
           </Button>,
-          <Button key="submit" type="primary" onClick={() => operationForm.submit()}>
+          <Button key="submit" type="primary" onClick={() => operationForm.submit()} loading={operationSubmitting}>
             {t('common.create')}
           </Button>,
         ]}
