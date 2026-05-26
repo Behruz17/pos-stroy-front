@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { EditOutlined, DeleteOutlined, SaveOutlined, TeamOutlined, PlusOutlined, SearchOutlined, ShoppingCartOutlined, DollarOutlined, CalendarOutlined, UserOutlined, PrinterOutlined, HistoryOutlined, CheckCircleOutlined, CarOutlined, ShoppingOutlined, CheckCircleFilled } from '@ant-design/icons';
 
-import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, usersApi, debtorsApi, debtorOperationsApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style, type UserWithCreated, type Debtor } from '../api';
+import { salesApi, customersApi, productsApi, stockItemsApi, stylesApi, usersApi, debtorsApi, type Sale, type SaleItem, type SaleStage, type UpdateSaleItem, type Customer, type Product, type OverdueSale, type StageHistoryEntry, type StockItem, type Style, type UserWithCreated, type Debtor } from '../api';
 
 import { useAuth } from '../contexts/AuthContext';
 
@@ -164,6 +164,8 @@ export const Sales = () => {
   const hasDebtorSearchMatch = normalizedDebtorSearchText
     ? debtors.some(debtor => debtor.full_name?.trim().toLowerCase() === normalizedDebtorSearchText)
     : true;
+
+  const pendingNewDebtorName = debtorSearchText.trim() && !hasDebtorSearchMatch ? debtorSearchText.trim() : '';
 
   const debtorOptions = [
     ...debtors.map(debtor => ({
@@ -789,10 +791,6 @@ export const Sales = () => {
 
       
 
-      console.log('Creating sale with data:', createData);
-
-      const createdSale = await salesApi.create(createData);
-
       if (shouldShowDebtorSelect) {
 
         const totalAmount = saleItems.reduce((sum, item) => sum + (item.quantity * item.unit_price * (item.unit_value || 1.0)), 0);
@@ -803,47 +801,50 @@ export const Sales = () => {
 
         if (debtAmount > 0) {
 
-          if (typeof values.debtor_id === 'string' && values.debtor_id.startsWith(newDebtorOptionPrefix)) {
+          let debtorId = values.debtor_id;
 
-            const debtorName = values.debtor_id.replace(newDebtorOptionPrefix, '').trim();
+          if (!debtorId && pendingNewDebtorName) {
+            debtorId = `${newDebtorOptionPrefix}${pendingNewDebtorName}`;
+          }
 
-            await debtorsApi.create({
+          if (typeof debtorId === 'string' && debtorId.startsWith(newDebtorOptionPrefix)) {
+
+            const debtorName = debtorId.replace(newDebtorOptionPrefix, '').trim();
+
+            const createdDebtor = await debtorsApi.create({
 
               full_name: debtorName,
 
-              phone: values.debtor_phone,
+              phone: values.debtor_phone || null,
 
               initial_debt: debtAmount,
 
-              description: `Долг по продаже #${createdSale.id}`,
+              description: 'Должник по продаже',
 
               created_by: user?.id || 0,
 
             });
+
+            debtorId = createdDebtor.id;
 
             fetchDebtors();
 
-          } else {
-
-            await debtorOperationsApi.createBorrowed({
-
-              debtor_id: Number(values.debtor_id),
-
-              account_id: 1,
-
-              amount: debtAmount,
-
-              description: `Долг по продаже #${createdSale.id}`,
-
-              created_by: user?.id || 0,
-
-            });
-
           }
+
+          if (!debtorId || Number.isNaN(Number(debtorId))) {
+            message.error('Выберите должника или введите имя нового должника');
+            return;
+          }
+
+          createData.debtor_id = Number(debtorId);
 
         }
 
       }
+
+      console.log('Creating sale with data:', createData);
+
+      await salesApi.create(createData);
 
       message.success(t('sales.saleCreated'));
 
@@ -3185,7 +3186,14 @@ export const Sales = () => {
 
                     label={t('debtors.title', { defaultValue: 'Должник' })}
 
-                    rules={[{ required: true, message: 'Выберите должника' }]}
+                    rules={[
+                      {
+                        validator: async (_, value) => {
+                          if (value || pendingNewDebtorName) return;
+                          throw new Error('Выберите должника');
+                        },
+                      },
+                    ]}
 
                   >
 

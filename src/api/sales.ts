@@ -50,6 +50,7 @@ export interface CreateSaleRequest {
   electronic_amount?: number;
   stage?: SaleStage;
   debt_deadline?: string;
+  debtor_id?: number;
   account_id?: number;
   items: CreateSaleItem[];
 }

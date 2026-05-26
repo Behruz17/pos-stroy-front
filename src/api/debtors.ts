@@ -13,9 +13,9 @@ export interface Debtor {
 
 export interface CreateDebtorRequest {
   full_name: string;
-  phone?: string;
+  phone?: string | null;
   initial_debt?: number;
-  description?: string;
+  description?: string | null;
   created_by: number;
 }
 
